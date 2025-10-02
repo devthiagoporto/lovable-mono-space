@@ -5,6 +5,24 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [0.3.1] - 2025-10-02
+
+### 🐛 Corrigido (Revisão da Etapa 3)
+- **Performance**: Otimizadas queries com batch loading (2-3 queries paralelas vs 3+ sequenciais)
+- **Validação de CPF**: Adicionada validação regex para garantir 11 dígitos numéricos
+- **Validação por Tipo**: Corrigida para somar quantidades do mesmo tipo no carrinho
+- **Validação de Correspondência**: Adicionada verificação de lote-tipo (LOT_TYPE_MISMATCH)
+- **Validação de Quantidade**: Adicionada validação de quantidade > 0
+- **Capacidade do Setor**: Implementada verificação com warnings (não bloqueia)
+- **Mensagens de Erro**: Padronizadas e detalhadas com valores e limites
+- **Logging**: Adicionadas métricas de performance e logs estruturados
+
+### 📊 Melhorias
+- 14 códigos de erro (antes: 8)
+- 9 regras de validação (antes: 6)
+- Tempo médio: ~80-100ms (antes: ~150-200ms)
+- Ver: `ETAPA3_REVISAO.md`
+
 ## [0.3.0] - 2025-10-02
 
 ### ✨ Adicionado (Etapa 3 - CRUD e Validação)

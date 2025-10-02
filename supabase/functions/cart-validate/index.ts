@@ -38,15 +38,16 @@ Deno.serve(async (req) => {
     const body: CartValidationRequest = await req.json();
     const { tenantId, eventId, buyerCpf, items } = body;
 
+    const startTime = Date.now();
     console.log('Validating cart:', { tenantId, eventId, buyerCpf, itemCount: items.length });
 
-    // Normalize CPF
+    // Normalize and validate CPF
     const normalizedCpf = buyerCpf.replace(/\D/g, '');
-    if (normalizedCpf.length !== 11) {
+    if (normalizedCpf.length !== 11 || !/^\d{11}$/.test(normalizedCpf)) {
       return new Response(
         JSON.stringify({
           ok: false,
-          errors: [{ code: 'INVALID_CPF', message: 'CPF inválido' }],
+          errors: [{ code: 'INVALID_CPF', message: 'CPF inválido. Deve conter 11 dígitos numéricos.' }],
         }),
         { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -55,7 +56,7 @@ Deno.serve(async (req) => {
     const errors: ValidationError[] = [];
     const warnings: string[] = [];
 
-    // Load event with limits
+    // BATCH QUERY 1: Load event with limits
     const { data: event, error: eventError } = await supabase
       .from('events')
       .select('*')
@@ -64,69 +65,123 @@ Deno.serve(async (req) => {
       .single();
 
     if (eventError || !event) {
+      console.error('Event not found:', { eventId, tenantId, error: eventError });
       return new Response(
         JSON.stringify({
           ok: false,
-          errors: [{ code: 'EVENT_NOT_FOUND', message: 'Evento não encontrado' }],
+          errors: [{ code: 'EVENT_NOT_FOUND', message: 'Evento não encontrado ou não pertence ao tenant informado.' }],
         }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const limits = event.regras_limite || {};
+    console.log('Event limits loaded:', limits);
 
-    // Load lots and ticket types
+    // BATCH QUERY 2: Load lots, ticket types, and sectors in parallel
     const lotIds = items.map((i) => i.lotId);
-    const { data: lots, error: lotsError } = await supabase
-      .from('lots')
-      .select('*')
-      .in('id', lotIds);
-
-    if (lotsError || !lots) {
-      return new Response(
-        JSON.stringify({
-          ok: false,
-          errors: [{ code: 'LOTS_NOT_FOUND', message: 'Lotes não encontrados' }],
-        }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     const ticketTypeIds = items.map((i) => i.ticketTypeId);
-    const { data: ticketTypes, error: typesError } = await supabase
-      .from('ticket_types')
-      .select('*')
-      .in('id', ticketTypeIds);
+    
+    const [lotsResult, ticketTypesResult] = await Promise.all([
+      supabase.from('lots').select('*').in('id', lotIds),
+      supabase.from('ticket_types').select('*, sectors(*)').in('id', ticketTypeIds),
+    ]);
 
-    if (typesError || !ticketTypes) {
+    const { data: lots, error: lotsError } = lotsResult;
+    const { data: ticketTypes, error: typesError } = ticketTypesResult;
+
+    if (lotsError || !lots || lots.length === 0) {
+      console.error('Lots not found:', { lotIds, error: lotsError });
       return new Response(
         JSON.stringify({
           ok: false,
-          errors: [{ code: 'TYPES_NOT_FOUND', message: 'Tipos de ingresso não encontrados' }],
+          errors: [{ code: 'LOTS_NOT_FOUND', message: 'Um ou mais lotes não foram encontrados.' }],
         }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Validate each item
+    if (typesError || !ticketTypes || ticketTypes.length === 0) {
+      console.error('Ticket types not found:', { ticketTypeIds, error: typesError });
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          errors: [{ code: 'TYPES_NOT_FOUND', message: 'Um ou mais tipos de ingresso não foram encontrados.' }],
+        }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('Batch queries completed:', {
+      lotsCount: lots.length,
+      typesCount: ticketTypes.length,
+      elapsed: Date.now() - startTime,
+    });
+
+    // Aggregate quantities first
     const now = new Date();
     const clockSkewSeconds = 60;
     let totalQuantity = 0;
     const quantityByType: Record<string, number> = {};
     const quantityByLot: Record<string, number> = {};
+    const quantityBySector: Record<string, number> = {};
 
+    // First pass: aggregate quantities
     for (const item of items) {
-      totalQuantity += item.quantity;
-      quantityByType[item.ticketTypeId] = (quantityByType[item.ticketTypeId] || 0) + item.quantity;
-      quantityByLot[item.lotId] = (quantityByLot[item.lotId] || 0) + item.quantity;
-
-      const lot = lots.find((l) => l.id === item.lotId);
-      if (!lot) {
-        errors.push({ code: 'LOT_NOT_FOUND', lotId: item.lotId, message: `Lote ${item.lotId} não encontrado` });
+      if (item.quantity <= 0) {
+        errors.push({
+          code: 'INVALID_QUANTITY',
+          lotId: item.lotId,
+          message: 'Quantidade deve ser maior que zero',
+        });
         continue;
       }
 
-      // Check sales window
+      totalQuantity += item.quantity;
+      quantityByType[item.ticketTypeId] = (quantityByType[item.ticketTypeId] || 0) + item.quantity;
+      quantityByLot[item.lotId] = (quantityByLot[item.lotId] || 0) + item.quantity;
+    }
+
+    // Validate each item
+    for (const item of items) {
+      const lot = lots.find((l) => l.id === item.lotId);
+      if (!lot) {
+        errors.push({
+          code: 'LOT_NOT_FOUND',
+          lotId: item.lotId,
+          message: `Lote não encontrado: ${item.lotId}`,
+        });
+        continue;
+      }
+
+      const ticketType = ticketTypes.find((t) => t.id === item.ticketTypeId);
+      if (!ticketType) {
+        errors.push({
+          code: 'TYPE_NOT_FOUND',
+          ticketTypeId: item.ticketTypeId,
+          message: `Tipo de ingresso não encontrado: ${item.ticketTypeId}`,
+        });
+        continue;
+      }
+
+      // Validate lot belongs to ticket type
+      if (lot.ticket_type_id !== item.ticketTypeId) {
+        errors.push({
+          code: 'LOT_TYPE_MISMATCH',
+          lotId: lot.id,
+          ticketTypeId: item.ticketTypeId,
+          message: `Lote ${lot.nome} não pertence ao tipo de ingresso informado`,
+        });
+        continue;
+      }
+
+      // Aggregate by sector
+      const sector = ticketType.sectors;
+      if (sector) {
+        quantityBySector[sector.id] = (quantityBySector[sector.id] || 0) + item.quantity;
+      }
+
+      // RULE 1: Check sales window
       if (lot.inicio_vendas) {
         const startDate = new Date(lot.inicio_vendas);
         startDate.setSeconds(startDate.getSeconds() - clockSkewSeconds);
@@ -134,7 +189,7 @@ Deno.serve(async (req) => {
           errors.push({
             code: 'LOTE_FORA_DA_JANELA',
             lotId: lot.id,
-            message: `Lote ${lot.nome} ainda não está disponível para venda`,
+            message: `Lote "${lot.nome}" ainda não está disponível para venda. Início: ${new Date(lot.inicio_vendas).toLocaleString('pt-BR')}`,
           });
         }
       }
@@ -146,47 +201,59 @@ Deno.serve(async (req) => {
           errors.push({
             code: 'LOTE_FORA_DA_JANELA',
             lotId: lot.id,
-            message: `Lote ${lot.nome} não está mais disponível para venda`,
+            message: `Lote "${lot.nome}" não está mais disponível para venda. Fim: ${new Date(lot.fim_vendas).toLocaleString('pt-BR')}`,
           });
         }
       }
 
-      // Check stock
+      // RULE 2: Check stock availability
       const available = lot.qtd_total - lot.qtd_vendida;
       if (item.quantity > available) {
         errors.push({
           code: 'LOTE_SEM_ESTOQUE',
           lotId: lot.id,
-          message: `Lote ${lot.nome} não tem estoque suficiente (disponível: ${available})`,
-        });
-      }
-
-      // Check ticket type limits
-      const ticketType = ticketTypes.find((t) => t.id === item.ticketTypeId);
-      if (ticketType && ticketType.max_por_pedido && item.quantity > ticketType.max_por_pedido) {
-        errors.push({
-          code: 'LIMIT_MAX_POR_TIPO_POR_PEDIDO',
-          ticketTypeId: ticketType.id,
-          message: `Quantidade máxima por pedido para ${ticketType.nome} é ${ticketType.max_por_pedido}`,
+          message: `Lote "${lot.nome}" não tem estoque suficiente. Disponível: ${available}, solicitado: ${item.quantity}`,
         });
       }
     }
 
-    // Check total limit per order
+    // RULE 3: Check max per type per order (aggregate validation)
+    for (const [typeId, qty] of Object.entries(quantityByType)) {
+      const ticketType = ticketTypes.find((t) => t.id === typeId);
+      if (ticketType && ticketType.max_por_pedido && qty > ticketType.max_por_pedido) {
+        errors.push({
+          code: 'LIMIT_MAX_POR_TIPO_POR_PEDIDO',
+          ticketTypeId: typeId,
+          message: `Quantidade máxima por pedido para "${ticketType.nome}" é ${ticketType.max_por_pedido}. Você está tentando comprar ${qty}.`,
+        });
+      }
+    }
+
+    // RULE 4: Check total limit per order
     if (limits.maxTotalPorPedido && totalQuantity > limits.maxTotalPorPedido) {
       errors.push({
         code: 'LIMIT_MAX_TOTAL_POR_PEDIDO',
-        message: `Quantidade máxima total por pedido é ${limits.maxTotalPorPedido}`,
+        message: `Quantidade máxima total por pedido é ${limits.maxTotalPorPedido}. Você está tentando comprar ${totalQuantity}.`,
       });
     }
 
-    // Check CPF limits
-    const { data: paidTickets } = await supabase
+    // BATCH QUERY 3: Check CPF purchase history (only paid orders)
+    const cpfCheckStart = Date.now();
+    const { data: paidTickets, error: cpfError } = await supabase
       .from('tickets')
-      .select('ticket_type_id, orders!inner(status)')
+      .select('ticket_type_id, orders!inner(status, event_id)')
       .eq('cpf_titular', normalizedCpf)
       .eq('orders.event_id', eventId)
       .eq('orders.status', 'pago');
+
+    if (cpfError) {
+      console.error('Error fetching CPF history:', cpfError);
+    }
+
+    console.log('CPF history check completed:', {
+      elapsed: Date.now() - cpfCheckStart,
+      ticketsFound: paidTickets?.length || 0,
+    });
 
     const ticketsByCpfByType: Record<string, number> = {};
     let totalTicketsByCpf = 0;
@@ -198,7 +265,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Check max per CPF per type
+    // RULE 5: Check max per CPF per type
     if (limits.maxPorCPFPorTipo) {
       for (const [typeId, qty] of Object.entries(quantityByType)) {
         const current = ticketsByCpfByType[typeId] || 0;
@@ -207,22 +274,50 @@ Deno.serve(async (req) => {
           errors.push({
             code: 'LIMIT_MAX_POR_CPF_POR_TIPO',
             ticketTypeId: typeId,
-            message: `CPF já possui ${current} ingressos do tipo ${ticketType?.nome || typeId}. Limite: ${limits.maxPorCPFPorTipo}`,
+            message: `CPF já possui ${current} ingresso(s) do tipo "${ticketType?.nome || typeId}". Limite: ${limits.maxPorCPFPorTipo}. Tentando adicionar: ${qty}.`,
           });
         }
       }
     }
 
-    // Check max per CPF in event
+    // RULE 6: Check max per CPF in event
     if (limits.maxPorCPFNoEvento && totalTicketsByCpf + totalQuantity > limits.maxPorCPFNoEvento) {
       errors.push({
         code: 'LIMIT_MAX_POR_CPF_NO_EVENTO',
-        message: `CPF já possui ${totalTicketsByCpf} ingressos neste evento. Limite: ${limits.maxPorCPFNoEvento}`,
+        message: `CPF já possui ${totalTicketsByCpf} ingresso(s) neste evento. Limite total: ${limits.maxPorCPFNoEvento}. Tentando adicionar: ${totalQuantity}.`,
       });
+    }
+
+    // Check sector capacity (WARNING only, does not block)
+    for (const [sectorId, qty] of Object.entries(quantityBySector)) {
+      const ticketType = ticketTypes.find((t) => t.sectors?.id === sectorId);
+      if (ticketType && ticketType.sectors) {
+        const sector = ticketType.sectors;
+        
+        // Get all lots for this sector to calculate total allocation
+        const { data: sectorLots } = await supabase
+          .from('lots')
+          .select('qtd_total, ticket_types!inner(sector_id)')
+          .eq('ticket_types.sector_id', sectorId);
+
+        if (sectorLots) {
+          const totalAllocated = sectorLots.reduce((sum, lot) => sum + lot.qtd_total, 0);
+          if (totalAllocated > sector.capacidade) {
+            warnings.push(
+              `Atenção: O setor "${sector.nome}" tem capacidade de ${sector.capacidade}, mas ${totalAllocated} ingressos foram alocados nos lotes. A capacidade pode ser excedida.`
+            );
+          }
+        }
+      }
     }
 
     // If there are errors, return them
     if (errors.length > 0) {
+      console.log('Validation failed with errors:', {
+        errorCount: errors.length,
+        errors: errors.map((e) => e.code),
+        elapsed: Date.now() - startTime,
+      });
       return new Response(
         JSON.stringify({ ok: false, errors }),
         { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -230,6 +325,13 @@ Deno.serve(async (req) => {
     }
 
     // Success response
+    const totalElapsed = Date.now() - startTime;
+    console.log('Validation successful:', {
+      totalItems: totalQuantity,
+      warningCount: warnings.length,
+      elapsed: totalElapsed,
+    });
+
     return new Response(
       JSON.stringify({
         ok: true,
