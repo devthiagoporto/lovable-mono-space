@@ -33,6 +33,9 @@ interface Discount {
   appliedTo: string[];
 }
 
+// Helper para arredondar valores monetários (evita erros de float)
+const round = (value: number): number => parseFloat(value.toFixed(2));
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -146,7 +149,7 @@ Deno.serve(async (req) => {
       const missingCodes = couponCodes.filter(code => !foundCodes.includes(code.toUpperCase()));
       missingCodes.forEach(code => {
         errors.push({
-          code: 'COUPON_NOT_FOUND',
+          code: 'CUPOM_NAO_ENCONTRADO',
           couponCode: code,
           message: `Cupom "${code}" não encontrado ou inativo.`,
         });
@@ -161,7 +164,7 @@ Deno.serve(async (req) => {
     const quantityByLot: Record<string, number> = {};
     const quantityBySector: Record<string, number> = {};
 
-    // Calculate subtotal by type
+    // Calculate subtotal by type (com arredondamento)
     const subtotalByType: Record<string, number> = {};
 
     // First pass: aggregate quantities and calculate subtotals
@@ -179,10 +182,11 @@ Deno.serve(async (req) => {
       quantityByType[item.ticketTypeId] = (quantityByType[item.ticketTypeId] || 0) + item.quantity;
       quantityByLot[item.lotId] = (quantityByLot[item.lotId] || 0) + item.quantity;
 
-      // Calculate subtotal
+      // Calculate subtotal (com arredondamento)
       const lot = lots.find((l: any) => l.id === item.lotId);
       if (lot) {
-        subtotalByType[item.ticketTypeId] = (subtotalByType[item.ticketTypeId] || 0) + (lot.preco * item.quantity);
+        const itemTotal = round(lot.preco * item.quantity);
+        subtotalByType[item.ticketTypeId] = round((subtotalByType[item.ticketTypeId] || 0) + itemTotal);
       }
     }
 
@@ -356,22 +360,25 @@ Deno.serve(async (req) => {
 
     // ===== COUPON VALIDATION AND DISCOUNT CALCULATION =====
     const discounts: Discount[] = [];
-    let totalSubtotal = Object.values(subtotalByType).reduce((sum, val) => sum + val, 0);
+    let totalSubtotal = round(Object.values(subtotalByType).reduce((sum, val) => sum + val, 0));
     
     if (coupons && coupons.length > 0) {
-      // Check combinability
+      // REGRA: Verificar combinabilidade
       const nonCombinable = coupons.filter((c: any) => !c.combinavel);
+
+      // Regra 1: Se há >1 cupom não combinável, erro
       if (nonCombinable.length > 1) {
         errors.push({
-          code: 'COUPON_NOT_COMBINABLE',
+          code: 'CUPOM_NAO_COMBINAVEL',
           message: `Os cupons ${nonCombinable.map((c: any) => c.codigo).join(', ')} não são combináveis entre si.`,
         });
       }
 
-      if (nonCombinable.length > 0 && coupons.length > 1 && nonCombinable.length < coupons.length) {
+      // Regra 2: Se há 1 não combinável + outros cupons, erro
+      if (nonCombinable.length === 1 && coupons.length > 1) {
         errors.push({
-          code: 'COUPON_NOT_COMBINABLE',
-          message: `O cupom ${nonCombinable[0].codigo} não é combinável com outros cupons.`,
+          code: 'CUPOM_NAO_COMBINAVEL',
+          message: `O cupom "${nonCombinable[0].codigo}" não é combinável com outros cupons.`,
         });
       }
 
@@ -390,48 +397,66 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Validate and calculate discounts for each coupon
-      for (const coupon of coupons as any[]) {
-        // Check total limit
-        if (coupon.limites?.limiteTotal && coupon.uso_total >= coupon.limites.limiteTotal) {
-          errors.push({
-            code: 'COUPON_LIMIT_EXCEEDED',
-            couponCode: coupon.codigo,
-            message: `Cupom "${coupon.codigo}" atingiu o limite de usos (${coupon.limites.limiteTotal}).`,
-          });
-          continue;
-        }
+      // Ordenar cupons: cortesia → valor → percentual
+      const sortedCoupons = [...(coupons as any[])].sort((a, b) => {
+        const order = { cortesia: 0, valor: 1, percentual: 2 };
+        return order[a.tipo as keyof typeof order] - order[b.tipo as keyof typeof order];
+      });
 
-        // Check CPF limit
-        if (coupon.limites?.limitePorCPF) {
-          const currentUsage = usageByCoupon[coupon.id] || 0;
-          if (currentUsage >= coupon.limites.limitePorCPF) {
+      // Validate and calculate discounts for each coupon
+      for (const coupon of sortedCoupons) {
+        // REGRA: Verificar limiteTotal (uso projetado = uso_total + 1)
+        if (coupon.limites?.limiteTotal) {
+          const projectedTotal = coupon.uso_total + 1;
+          if (projectedTotal > coupon.limites.limiteTotal) {
             errors.push({
-              code: 'COUPON_CPF_LIMIT_EXCEEDED',
+              code: 'LIMITE_TOTAL_EXCEDIDO',
               couponCode: coupon.codigo,
-              message: `Você já utilizou o cupom "${coupon.codigo}" o número máximo de vezes (${coupon.limites.limitePorCPF}).`,
+              message: `Cupom "${coupon.codigo}" atingiu o limite de usos. Usos: ${coupon.uso_total}/${coupon.limites.limiteTotal}.`,
             });
             continue;
           }
         }
 
-        // Determine which types are eligible (whitelist)
-        const eligibleTypes = coupon.limites?.whitelistTipos?.length > 0
-          ? coupon.limites.whitelistTipos
-          : Object.keys(quantityByType);
+        // REGRA: Verificar limitePorCPF (uso projetado = usoAtual + 1)
+        if (coupon.limites?.limitePorCPF) {
+          const currentUsage = usageByCoupon[coupon.id] || 0;
+          const projectedUsage = currentUsage + 1;
+          if (projectedUsage > coupon.limites.limitePorCPF) {
+            errors.push({
+              code: 'LIMITE_POR_CPF_EXCEDIDO',
+              couponCode: coupon.codigo,
+              message: `Você já utilizou o cupom "${coupon.codigo}" ${currentUsage} vez(es). Limite: ${coupon.limites.limitePorCPF}.`,
+            });
+            continue;
+          }
+        }
+
+        // REGRA: Determinar tipos elegíveis (whitelist)
+        let eligibleTypes: string[] = [];
+        if (coupon.limites?.whitelistTipos && coupon.limites.whitelistTipos.length > 0) {
+          // Whitelist: só tipos que estão na lista E no carrinho
+          eligibleTypes = Object.keys(subtotalByType).filter(typeId => 
+            coupon.limites.whitelistTipos.includes(typeId)
+          );
+        } else {
+          // Sem whitelist: todos os tipos do carrinho são elegíveis
+          eligibleTypes = Object.keys(subtotalByType);
+        }
 
         const appliedTo: string[] = [];
         let discountAmount = 0;
 
         // Calculate discount based on type
         if (coupon.tipo === 'cortesia') {
-          // Cortesia: zero out eligible items
+          // Cortesia: zera apenas itens elegíveis
           for (const typeId of eligibleTypes) {
             if (subtotalByType[typeId]) {
               discountAmount += subtotalByType[typeId];
               appliedTo.push(typeId);
             }
           }
+          discountAmount = round(discountAmount);
         } else {
           // Calculate eligible subtotal
           let eligibleSubtotal = 0;
@@ -441,11 +466,13 @@ Deno.serve(async (req) => {
               appliedTo.push(typeId);
             }
           }
+          eligibleSubtotal = round(eligibleSubtotal);
 
           if (coupon.tipo === 'percentual') {
-            discountAmount = (eligibleSubtotal * coupon.valor) / 100;
+            discountAmount = round((eligibleSubtotal * coupon.valor) / 100);
           } else if (coupon.tipo === 'valor') {
-            discountAmount = Math.min(coupon.valor, eligibleSubtotal);
+            // Valor fixo: não pode exceder subtotal elegível
+            discountAmount = round(Math.min(coupon.valor, eligibleSubtotal));
           }
         }
 
@@ -474,9 +501,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Calculate final total
-    const totalDiscount = discounts.reduce((sum, d) => sum + d.amount, 0);
-    const finalTotal = Math.max(0, totalSubtotal - totalDiscount);
+    // Calculate final total (nunca negativo)
+    const totalDiscount = round(discounts.reduce((sum, d) => sum + d.amount, 0));
+    const finalTotal = round(Math.max(0, totalSubtotal - totalDiscount));
 
     // Success response
     const totalElapsed = Date.now() - startTime;

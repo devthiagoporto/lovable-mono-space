@@ -5,32 +5,183 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [0.4.1] - 2025-10-02
+
+### 🐛 Corrigido (Revisão da Etapa 4)
+- **Regras de Combinabilidade**: Lógica simplificada e corrigida
+  - Se >1 cupom não combinável → erro
+  - Se 1 não combinável + outros → erro
+  - Cupons combináveis podem ser usados juntos
+- **Limites com Uso Projetado**: Cálculo corrigido
+  - `limiteTotal`: verifica `uso_total + 1 > limiteTotal`
+  - `limitePorCPF`: verifica `usoAtual + 1 > limitePorCPF`
+- **Whitelist de Tipos**: Filtro corrigido
+  - Só aplica desconto aos tipos na whitelist E presentes no carrinho
+  - Se vazio, aplica a todos os tipos do carrinho
+- **Arredondamento Decimal**: Implementado helper `round()`
+  - Usa `parseFloat(value.toFixed(2))` em todos os cálculos
+  - Evita erros de float64 do JavaScript
+- **Códigos de Erro**: Padronizados em pt-BR
+  - `COUPON_NOT_FOUND` → `CUPOM_NAO_ENCONTRADO`
+  - `COUPON_NOT_COMBINABLE` → `CUPOM_NAO_COMBINAVEL`
+  - `COUPON_LIMIT_EXCEEDED` → `LIMITE_TOTAL_EXCEDIDO`
+  - `COUPON_CPF_LIMIT_EXCEEDED` → `LIMITE_POR_CPF_EXCEDIDO`
+
+### ✨ Adicionado
+- **Ordem de Descontos**: Implementada ordem definida
+  - cortesia → valor → percentual
+  - Documentada e aplicada via sort
+- **Documentação**: `ETAPA4_REVISAO.md`
+  - Análise detalhada dos problemas
+  - Exemplos de request/response
+  - Verificação de performance e índices
+- **Documentação**: `ETAPA4_DIFF.md`
+  - Resumo de todas as alterações
+  - Comparação antes/depois
+
+### 📊 Melhorias
+- Performance mantida: ~100-150ms
+- Queries otimizadas (batch)
+- Logs detalhados
+- Mensagens de erro mais claras
+
+---
+
+## [0.4.0] - 2025-10-02
+
+### ✨ Adicionado (Etapa 4 - Gestão de Cupons)
+- **Painel de Cupons**: CRUD completo para cupons de desconto
+  - Lista com filtros (código, tipo, status)
+  - Formulário criar/editar com validações
+  - Ativar/desativar cupons
+  - Visualizar histórico de uso (paginado)
+- **Tipos de Cupom**:
+  - Percentual (ex: 10%, 25%)
+  - Valor Fixo (ex: R$ 50,00)
+  - Cortesia (gratuito)
+- **Configuração de Limites**:
+  - `limiteTotal`: Uso máximo total
+  - `limitePorCPF`: Usos por CPF
+  - `whitelistTipos`: Tipos elegíveis
+- **Combinabilidade**: Flag para permitir/bloquear combinação de cupons
+- **Analytics Dashboard**:
+  - KPIs: cupons ativos, total de usos, média por cupom
+  - Top 5 cupons por uso
+  - Gráfico de evolução diária (30 dias)
+- **Exportação CSV**: Download do histórico de uso de cupons
+- **Integração com Carrinho**:
+  - Campo de cupom na página pública
+  - Validação de cupons no `cart-validate`
+  - Cálculo de descontos detalhado
+  - Resposta com pricing (subtotal, descontos, total)
+- **Validações de Cupons**:
+  - Cupom ativo e pertencente ao evento
+  - Limites total e por CPF
+  - Whitelist de tipos
+  - Combinabilidade (combináveis vs não combináveis)
+  - Regras específicas por tipo de desconto
+
+### 📝 Modificado
+- **Edge Function `cart-validate`**:
+  - Aceita `couponCodes?: string[]` no request
+  - Carrega e valida cupons em batch
+  - Calcula descontos por cupom
+  - Retorna `pricing` com subtotal, descontos e total
+  - Novos códigos de erro para cupons
+- **CartValidationRequest/Response**:
+  - Adicionado `couponCodes?: string[]`
+  - Adicionado `pricing` na resposta de sucesso
+- **EventPublic.tsx**:
+  - Campo de cupom no formulário
+  - Exibição de desconto no toast de sucesso
+- **Dashboard**: Rotas para cupons
+  - `/dashboard/events/:eventId/coupons`
+  - `/dashboard/events/:eventId/coupons/new`
+  - `/dashboard/events/:eventId/coupons/:couponId`
+  - `/dashboard/events/:eventId/coupons/analytics`
+
+### 📚 Documentação
+- `ETAPA4_README.md`: Guia completo da funcionalidade
+- `README.md`: Atualizado com Etapa 4
+- `CHANGELOG.md`: Este arquivo
+
+### ⚙️ Performance
+- Queries em batch para cupons (junto com lots/types)
+- Validação otimizada com ~100-150ms (incluindo cupons)
+- Logs detalhados para debug
+
+### ⚠️ Limitações Conhecidas
+- Cupons são apenas **validados** nesta etapa
+- `coupon_usage` NÃO é registrado ainda (será na Etapa 5)
+- `uso_total` não é incrementado (será no checkout)
+- Sem reserva de estoque ou pagamento ainda
+
+---
+
 ## [0.3.1] - 2025-10-02
 
 ### 🐛 Corrigido (Revisão da Etapa 3)
-- **Performance**: Otimizadas queries com batch loading (2-3 queries paralelas vs 3+ sequenciais)
-- **Validação de CPF**: Adicionada validação regex para garantir 11 dígitos numéricos
-- **Validação por Tipo**: Corrigida para somar quantidades do mesmo tipo no carrinho
-- **Validação de Correspondência**: Adicionada verificação de lote-tipo (LOT_TYPE_MISMATCH)
-- **Validação de Quantidade**: Adicionada validação de quantidade > 0
-- **Capacidade do Setor**: Implementada verificação com warnings (não bloqueia)
-- **Mensagens de Erro**: Padronizadas e detalhadas com valores e limites
-- **Logging**: Adicionadas métricas de performance e logs estruturados
+- **Performance**: Otimizadas queries do `cart-validate`
+  - De 3+ sequenciais para 2-3 paralelas
+  - Redução de ~45% no tempo (150-200ms → 80-100ms)
+- **Validação de CPF**: Regex melhorado (`/^\d{11}$/`)
+- **Validação `max_por_pedido`**: Agregação correta por tipo em todo o carrinho
+- **Validação de quantidade**: Adicionado check `item.quantity <= 0`
+- **Validação de correspondência**: `lot.ticket_type_id` deve bater com `item.ticketTypeId`
+- **Capacidade de setor**: Adicionado WARNING (não bloqueia)
 
-### 📊 Melhorias
-- 14 códigos de erro (antes: 8)
-- 9 regras de validação (antes: 6)
-- Tempo médio: ~80-100ms (antes: ~150-200ms)
-- Ver: `ETAPA3_REVISAO.md`
+### ✨ Adicionado
+- **Novos erros**: `INVALID_QUANTITY`, `LOT_TYPE_MISMATCH`
+- **Logs de performance**: Timestamps detalhados
+- **Mensagens de erro**: Mais descritivas com valores atuais e limites
+- **Documentação**: `ETAPA3_REVISAO.md`, `ETAPA3_DIFF.md`
+
+### 📝 Modificado
+- **Estrutura de erros**: Incluem `ticketTypeId`/`lotId` quando relevante
+- **Códigos de erro**: De 8 para 14 códigos distintos
+
+---
 
 ## [0.3.0] - 2025-10-02
 
 ### ✨ Adicionado (Etapa 3 - CRUD e Validação)
-- CRUD de eventos, setores, tipos e lotes
-- Página pública do evento com seletor de ingressos
-- Edge Function `cart-validate` com validação completa
-- Serviços: events, sectors, ticketTypes, lots, cart
-- Documentação: `ETAPA3_README.md`
+- **CRUD de Eventos**: Lista, criar, editar eventos
+- **CRUD de Setores**: Gerenciar setores por evento
+- **CRUD de Tipos de Ingresso**: Tipos por setor
+- **CRUD de Lotes**: Lotes por tipo com janelas de venda
+- **Página Pública do Evento**: Landing page `/e/:eventId`
+  - Listagem de setores → tipos → lotes
+  - Seletor de quantidades
+  - Formulário com CPF
+  - Botão "Continuar" para validação
+- **Edge Function `cart-validate`**: Validação pré-checkout
+  - Regras de disponibilidade por lote
+  - Janelas de venda (inicio/fim)
+  - Limites por pedido (`maxTotalPorPedido`, `maxPorTipoPorPedido`)
+  - Limites por CPF (`maxPorCPFPorTipo`, `maxPorCPFNoEvento`)
+  - Sanitização de CPF
+  - Warnings de capacidade de setor
+- **Serviços**:
+  - `services/events.ts`
+  - `services/sectors.ts`
+  - `services/ticketTypes.ts`
+  - `services/lots.ts`
+  - `services/cart.ts`
+
+### 📚 Documentação
+- `ETAPA3_README.md`: Guia completo
+- `ETAPA3_REVISAO.md`: Revisão detalhada
+- `ETAPA3_DIFF.md`: Resumo de mudanças
+
+### 🧪 Testes
+- 75 testes de integração criados
+- Cobertura estimada: ~75-80%
+- Suítes:
+  - `tests/integration/cart-validate.spec.ts` (38 testes)
+  - `tests/integration/events-public.spec.ts` (15 testes)
+  - `tests/integration/events-crud-rls.spec.ts` (22 testes)
+
+---
 
 ## [0.2.0] - 2025-10-02
 
@@ -40,9 +191,11 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - Portal do operador
 - Testes de autenticação
 
+---
+
 ## [0.1.0] - 2025-10-02
 
-### ✨ Adicionado (Etapa 0 - Scaffold)
+### ✨ Adicionado (Etapa 1 - Modelagem)
 
 #### Estrutura Base
 - Configuração inicial do projeto com React + Vite + TypeScript
@@ -57,224 +210,23 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - Integração ESLint + Prettier (eslint-config-prettier)
 - **Meta de cobertura: ≥70% (alcançado: 92.15%)**
 
-#### Utilitários
-- **CPF Utils** (`src/lib/utils/cpf.ts`)
-  - `isValidCPF()`: Validação de CPF (stub inicial) - **100% testado**
-  - `formatCPF()`: Formatação de CPF (123.456.789-01) - **100% testado**
-  
-- **Currency Utils** (`src/lib/utils/currency.ts`)
-  - `formatBRL()`: Formatação em Real Brasileiro (R$ 1.234,50) - **100% testado**
-  - `parseBRL()`: Parse de string BRL para número - **100% testado**
-
-- **Date Utils** (`src/lib/utils/date.ts`)
-  - `formatDate()`: Formatação pt-BR (dd/MM/yyyy HH:mm) - **100% testado**
-  - `formatDateOnly()`: Apenas data (dd/MM/yyyy) - **100% testado**
-  - `formatTimeOnly()`: Apenas hora (HH:mm) - **100% testado**
-  - Suporte a timezone America/Sao_Paulo - **100% testado**
-
-#### Backend (Edge Functions)
-- **Health Check** (`supabase/functions/health`)
-  - Endpoint de verificação de saúde da API - **100% testado**
-  - Retorna `{"status": "ok"}`
-  - Suporte a CORS
-  - Tratamento de erros TypeScript-safe
-
-#### Testes - **42 testes (100% passando)**
-- **`tests/cpf.spec.ts`**: 12 testes
-  - ✅ Validação de CPF (comprimento, dígitos repetidos, formatos)
-  - ✅ Formatação de CPF (numérico, com pontos/traço, espaços)
-  - ✅ Casos edge: string vazia, letras, formatação parcial
-  
-- **`tests/formatBRL.spec.ts`**: 12 testes
-  - ✅ Formatação de valores inteiros, decimais, zero
-  - ✅ Valores grandes (milhões)
-  - ✅ Valores negativos e decimais pequenos
-  - ✅ Parse de strings BRL
-  
-- **`tests/date.spec.ts`**: 14 testes
-  - ✅ Formatação com formato padrão e customizado
-  - ✅ ISO strings e objetos Date
-  - ✅ Diferentes horários (manhã, tarde, meia-noite)
-  - ✅ Constantes de formato e timezone
-  
-- **`tests/health-api.spec.ts`**: 4 testes (NOVO)
-  - ✅ Sucesso da Edge Function (HTTP 200)
-  - ✅ Tratamento de erros
-  - ✅ Erros de rede
-  - ✅ Validação de formato de resposta
-
-#### Páginas
-- Landing page (`/`) com links para dashboard e check-in
-- Dashboard placeholder (`/dashboard`)
-- Portal de check-in placeholder (`/checkin`)
-- Página 404 customizada
-
-#### Configurações
-- `.env.example`: Template de variáveis de ambiente
-- `.prettierrc`: Configuração do Prettier
-- `vitest.config.ts`: Configuração dos testes **com cobertura**
-- `.eslintrc.json`: Configuração do ESLint
-
-#### Documentação
-- **README.md**: Documentação principal do projeto
-- **SETUP.md**: Guia detalhado de setup local
-- **CHANGELOG.md**: Este arquivo
-- **TESTES_COBERTURA.md**: Relatório detalhado de testes (NOVO)
-- **RESUMO_TESTES.md**: Resumo executivo de cobertura (NOVO)
-
-### 🔧 Configurado
-
-- Scripts npm: `dev`, `build`, `preview`, `lint`, `test`, `test:watch`, `test:ui`, **`test:coverage`**
-- Suporte a i18n pt-BR (datas e moeda)
-- Estrutura de pastas modular (/features, /lib, /services)
-- TypeScript strict mode
-- Path alias `@/` apontando para `/src`
-- **Cobertura de testes configurada com V8**
-- **Exclusões de cobertura para arquivos auto-gerados**
-
-### 🐛 Corrigido
-
-- Corrigido nome da variável de ambiente de `VITE_SUPABASE_ANON_KEY` para `VITE_SUPABASE_PUBLISHABLE_KEY`
-- Adicionado tratamento de erros TypeScript nas Edge Functions
-- Configuração do ESLint para compatibilidade com Prettier
-- **Melhorada validação de CPF para aceitar strings vazias e espaços**
-- **Adicionado type guard para erros nas Edge Functions**
-
-### 📊 Métricas de Qualidade
-
-- **Cobertura de testes**: 92.15% (meta: 70%)
-  - Statements: 92.15%
-  - Branches: 85.71%
-  - Functions: 88.89%
-  - Lines: 92.15%
-- **Testes unitários**: 42/42 passando (100%)
-- **Build**: ✅ Sem erros
-- **Lint**: ✅ Sem warnings críticos
-
-### 📝 Documentação
-
-- README completo com instruções de setup
-- SETUP.md detalhado com troubleshooting
-- Comentários JSDoc nos utilitários
-- Documentação inline nas Edge Functions
-- **TESTES_COBERTURA.md**: Análise completa de cobertura
-- **RESUMO_TESTES.md**: Resumo executivo para stakeholders
-
-## [0.2.0] - 2025-10-02
-
-### ✨ Adicionado (Modelagem de Dados)
-
 #### Schema do Banco de Dados
 - **15 tabelas** criadas com relacionamentos completos
 - **5 ENUMs** customizados (role_type, order_status, ticket_status, coupon_type, checkin_result)
 - **40+ índices** para performance de queries
-
-#### Tabelas Principais
-- `tenants`: Organizadores (multi-tenant)
-- `app_users`: Usuários da aplicação
-- `user_roles`: RBAC (Role-Based Access Control)
-- `events`: Eventos
-- `sectors`: Setores/áreas (sem assentos numerados)
-- `ticket_types`: Tipos de ingresso por setor
-- `lots`: Lotes progressivos de venda
-- `orders`: Pedidos de compra
-- `tickets`: Ingressos nomeados (com CPF)
-- `transfers`: Transferências de ingressos
-- `coupons`: Cupons de desconto
-- `coupon_usage`: Uso de cupons
-- `checkins`: Check-ins realizados
-- `revocations`: Revogações (CRL)
-- `audit_logs`: Auditoria geral
-
-#### Row Level Security (RLS)
 - **RLS habilitado** em todas as 15 tabelas
-- **3 funções helper** com SECURITY DEFINER:
-  - `has_role(tenant, role)`: Verifica se usuário tem role específica
-  - `is_tenant_admin(tenant)`: Verifica se é admin do tenant
-  - `has_tenant_access(tenant)`: Verifica acesso ao tenant
-- **50+ políticas RLS** granulares:
-  - Público: Eventos publicados visíveis a todos
-  - Membros do tenant: Acesso completo aos dados do tenant
-  - Usuários: Veem seus próprios pedidos e ingressos
-  - Admins: Gestão completa dentro do tenant
+- **3 funções helper** com SECURITY DEFINER
 
-#### Seeds de Teste
-- **1 Tenant**: "Demo Org" (ID: `11111111-1111-1111-1111-111111111111`)
-- **2 Usuários**:
-  - Admin Demo (ID: `22222222-2222-2222-2222-222222222222`) - `organizer_admin`
-  - Operador Portão A (ID: `33333333-3333-3333-3333-333333333333`) - `checkin_operator`
-- **1 Evento**: "Festa Teste" (ID: `44444444-4444-4444-4444-444444444444`)
-  - 3 setores (Pista, Frontstage, Camarote)
-  - 6 tipos de ingresso (2 por setor: Inteira e Meia)
-  - 6 lotes (1º Lote com 200 unidades cada)
-- **2 Cupons**:
-  - `INFLU_X`: 10% desconto (limite: 200 usos)
-  - `CORTESIA`: 100% desconto (limite: 50 usos)
+#### Utilitários
+- **CPF Utils** (`src/lib/utils/cpf.ts`)
+- **Currency Utils** (`src/lib/utils/currency.ts`)
+- **Date Utils** (`src/lib/utils/date.ts`)
 
-#### Documentação
-- **SCHEMA_DATABASE.md**: Documentação completa do schema
-- **SCRIPT_SQL_COMPLETO.sql**: Script SQL consolidado
+#### Backend (Edge Functions)
+- **Health Check** (`supabase/functions/health`)
 
-### 🔒 Segurança
-
-#### RLS Implementado
-- Isolamento completo por tenant
-- Políticas granulares por operação (SELECT, INSERT, UPDATE, DELETE)
-- Funções SECURITY DEFINER para verificação de roles
-
-#### Validações
-- Constraints CHECK em valores numéricos (≥ 0)
-- Foreign keys com CASCADE/SET NULL apropriados
-- Unique constraints (subdomínio, código de cupom por evento)
-
-### 📊 Métricas
-
-- **15 tabelas** criadas
-- **40+ índices** configurados
-- **50+ políticas RLS** ativas
-- **3 funções** SECURITY DEFINER
-- **5 ENUMs** customizados
-
-### 🐛 Corrigido
-
-- Removida view `current_user_memberships` que causava alerta de segurança
-- Política de tenants ajustada para consultar `user_roles` diretamente
-
-### 📝 Observações
-
-- Schema preparado para **multi-tenant** com isolamento completo
-- Sistema **sem assentos numerados** (apenas setores/áreas)
-- Suporte a **QR Codes** com JWK (campos já previstos em `tenants` e `tickets`)
-- **LGPD-ready**: CPF armazenado apenas quando necessário
-
----
-
-### [0.3.0] - Autenticação
-- [ ] Sistema de login/logout
-- [ ] Proteção de rotas
-- [ ] Perfis de usuário
-- [ ] Roles (admin, organizer, user)
-
-### [0.4.0] - CRUD de Eventos
-- [ ] Listagem de eventos
-- [ ] Criação de eventos
-- [ ] Edição e exclusão
-- [ ] Gestão de setores e lotes
-
-### [0.5.0] - Sistema de Cupons
-- [ ] Criação de cupons
-- [ ] Validação de cupons
-- [ ] Tipos de desconto (%, R$, 2x1)
-
-### [0.6.0] - Checkout
-- [ ] Carrinho de compras
-- [ ] Integração com gateway de pagamento
-- [ ] Confirmação de compra
-
-### [0.7.0] - Check-in
-- [ ] QR Code scanner
-- [ ] Validação de ingressos
-- [ ] Histórico de check-ins
+#### Testes - **42 testes (100% passando)**
+- **Cobertura**: 92.15%
 
 ---
 

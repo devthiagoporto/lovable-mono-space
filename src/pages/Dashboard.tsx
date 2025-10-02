@@ -1,8 +1,15 @@
+import { Routes, Route } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import Events from './Dashboard/Events';
+import EventForm from './Dashboard/EventForm';
+import Operators from './Dashboard/Operators';
+import Coupons from './Dashboard/Coupons';
+import CouponForm from './Dashboard/CouponForm';
+import CouponAnalytics from './Dashboard/CouponAnalytics';
 
-const Dashboard = () => {
+const DashboardHome = () => {
   const { user, memberships, signOut } = useAuth();
 
   const canManageOperators = memberships.some(
@@ -61,6 +68,22 @@ const Dashboard = () => {
         </CardContent>
       </Card>
     </div>
+  );
+};
+
+const Dashboard = () => {
+  return (
+    <Routes>
+      <Route index element={<DashboardHome />} />
+      <Route path="events" element={<Events />} />
+      <Route path="events/new" element={<EventForm />} />
+      <Route path="events/:eventId" element={<EventForm />} />
+      <Route path="events/:eventId/coupons" element={<Coupons />} />
+      <Route path="events/:eventId/coupons/new" element={<CouponForm />} />
+      <Route path="events/:eventId/coupons/:couponId" element={<CouponForm />} />
+      <Route path="events/:eventId/coupons/analytics" element={<CouponAnalytics />} />
+      <Route path="operators" element={<Operators />} />
+    </Routes>
   );
 };
 

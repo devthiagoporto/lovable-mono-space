@@ -1,6 +1,6 @@
 # Sistema de Ingressos Multi-Tenant
 
-Sistema completo de gerenciamento de ingressos para eventos, com autenticação multi-tenant, RBAC e portal de check-in.
+Sistema completo de gerenciamento de ingressos para eventos, com autenticação multi-tenant, RBAC, portal de check-in e sistema de cupons de desconto.
 
 ## 🚀 Arquitetura
 
@@ -35,6 +35,17 @@ Sistema completo de gerenciamento de ingressos para eventos, com autenticação 
 - Warnings de capacidade de setor
 - Ver: `ETAPA3_README.md` e `ETAPA3_REVISAO.md`
 
+### Etapa 4: Gestão de Cupons ✅ Revisada
+- CRUD completo de cupons (percentual, valor, cortesia)
+- Painel de analytics e exportação CSV
+- Integração com `cart-validate`
+- Limites com uso projetado
+- Combinabilidade de cupons
+- Whitelist de tipos elegíveis
+- Ordem de descontos: cortesia → valor → percentual
+- Arredondamento decimal preciso
+- Ver: `ETAPA4_README.md` e `ETAPA4_REVISAO.md`
+
 ## 🌐 Estrutura de Rotas
 
 | Rota | Proteção | Descrição |
@@ -44,6 +55,8 @@ Sistema completo de gerenciamento de ingressos para eventos, com autenticação 
 | `/dashboard` | Autenticado | Dashboard principal |
 | `/dashboard/events` | Autenticado | Lista de eventos |
 | `/dashboard/events/:id` | Autenticado | Criar/editar evento |
+| `/dashboard/events/:id/coupons` | Autenticado | Gestão de cupons |
+| `/dashboard/events/:id/coupons/analytics` | Autenticado | Analytics de cupons |
 | `/dashboard/operators` | Admin | Gestão de operadores |
 | `/e/:eventId` | Pública | Página do evento |
 | `/checkin` | `checkin_operator` | Portal de check-in |
@@ -239,6 +252,9 @@ Todas as tabelas possuem RLS habilitado:
 - [Revisão da Etapa 3](./ETAPA3_REVISAO.md)
 - [Diff da Etapa 3](./ETAPA3_DIFF.md)
 - [README da Etapa 3](./ETAPA3_README.md)
+- [README da Etapa 4](./ETAPA4_README.md)
+- [Revisão da Etapa 4](./ETAPA4_REVISAO.md)
+- [Diff da Etapa 4](./ETAPA4_DIFF.md)
 - [Testes de Integração](./TESTES_INTEGRACAO.md)
 - [Testes da Etapa 3](./tests/COMANDOS_TESTES_ETAPA3.md)
 - [Comandos de Teste](./tests/COMANDOS_TESTES.md)
@@ -246,11 +262,15 @@ Todas as tabelas possuem RLS habilitado:
 
 ## 🗺️ Próximas Etapas
 
-- [ ] Implementar fluxo de compra de ingressos
-- [ ] Adicionar validação de QR Codes (JWT assinado)
-- [ ] Implementar transferência de ingressos
+- [ ] **Etapa 5**: Checkout e Pagamento
+  - [ ] Criação de orders com status inicial
+  - [ ] Aplicação de cupons e registro em `coupon_usage`
+  - [ ] Integração com gateway de pagamento
+  - [ ] Emissão de tickets após confirmação
+  - [ ] Incremento de `uso_total` dos cupons
+- [ ] Validação de QR Codes (JWT assinado)
+- [ ] Transferência de ingressos
 - [ ] Dashboard de métricas e relatórios
-- [ ] Integração com gateway de pagamento
 
 ## 📧 Suporte
 

@@ -105,23 +105,23 @@ A Etapa 4 implementa um sistema completo de cupons de desconto com:
   "ok": false,
   "errors": [
     {
-      "code": "COUPON_NOT_FOUND",
+      "code": "CUPOM_NAO_ENCONTRADO",
       "couponCode": "INVALIDO",
       "message": "Cupom 'INVALIDO' não encontrado ou inativo."
     },
     {
-      "code": "COUPON_LIMIT_EXCEEDED",
+      "code": "LIMITE_TOTAL_EXCEDIDO",
       "couponCode": "VERAO2025",
-      "message": "Cupom 'VERAO2025' atingiu o limite de usos (100)."
+      "message": "Cupom 'VERAO2025' atingiu o limite de usos. Usos: 100/100."
     },
     {
-      "code": "COUPON_CPF_LIMIT_EXCEEDED",
+      "code": "LIMITE_POR_CPF_EXCEDIDO",
       "couponCode": "PROMO10",
-      "message": "Você já utilizou o cupom 'PROMO10' o número máximo de vezes (1)."
+      "message": "Você já utilizou o cupom 'PROMO10' 1 vez(es). Limite: 1."
     },
     {
-      "code": "COUPON_NOT_COMBINABLE",
-      "message": "O cupom VERAO2025 não é combinável com outros cupons."
+      "code": "CUPOM_NAO_COMBINAVEL",
+      "message": "O cupom 'VERAO2025' não é combinável com outros cupons."
     }
   ]
 }
@@ -131,10 +131,10 @@ A Etapa 4 implementa um sistema completo de cupons de desconto com:
 
 | Código | Descrição |
 |--------|-----------|
-| `COUPON_NOT_FOUND` | Cupom não existe ou está inativo |
-| `COUPON_LIMIT_EXCEEDED` | Limite total de usos atingido |
-| `COUPON_CPF_LIMIT_EXCEEDED` | CPF atingiu limite de usos |
-| `COUPON_NOT_COMBINABLE` | Tentativa de combinar cupons não combináveis |
+| `CUPOM_NAO_ENCONTRADO` | Cupom não existe ou está inativo |
+| `CUPOM_NAO_COMBINAVEL` | Tentativa de combinar cupons não combináveis |
+| `LIMITE_TOTAL_EXCEDIDO` | Limite total de usos atingido (uso projetado) |
+| `LIMITE_POR_CPF_EXCEDIDO` | CPF atingiu limite de usos (uso projetado) |
 
 ### 3. Regras de Validação de Cupons
 
