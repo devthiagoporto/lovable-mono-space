@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import CouponAnalytics from './Dashboard/CouponAnalytics';
 
 const DashboardHome = () => {
   const { user, memberships, signOut } = useAuth();
+  const navigate = useNavigate();
 
   const canManageOperators = memberships.some(
     (m) => m.role === 'organizer_admin' || m.role === 'admin_saas'
@@ -39,7 +40,7 @@ const DashboardHome = () => {
 
           <div className="space-y-2">
             <Button
-              onClick={() => (window.location.href = '/dashboard/events')}
+              onClick={() => navigate('/dashboard/events')}
               className="w-full"
             >
               Gerenciar Eventos
@@ -47,7 +48,7 @@ const DashboardHome = () => {
 
             {canManageOperators && (
               <Button
-                onClick={() => (window.location.href = '/dashboard/operators')}
+                onClick={() => navigate('/dashboard/operators')}
                 className="w-full"
                 variant="outline"
               >

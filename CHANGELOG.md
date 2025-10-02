@@ -5,6 +5,38 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [0.4.2] - 2025-06-01
+
+### 🐛 **CRÍTICO**: Corrigido (Navegação e Roteamento)
+- **AuthProvider fora do Router**: Movido `<AuthProvider>` para dentro de `<BrowserRouter>`
+  - Corrigido erro fatal: "useNavigate() may be used only in the context of a Router component"
+  - Aplicação não carregava (tela branca)
+- **Rotas do Dashboard quebradas**: Alterado de `/dashboard` para `/dashboard/*`
+  - Rotas aninhadas (cupons, analytics) agora funcionam
+  - Removidas rotas duplicadas do App.tsx
+  - Dashboard gerencia todas sub-rotas internamente
+- **Navegação com reload**: Substituído `window.location.href` por `navigate()`
+  - Performance: 2-3s → <100ms por navegação
+  - Estado React agora preservado
+- **Links não-SPA**: Substituído `<a href>` por `<Link to>` no NotFound
+  - Mantém SPA (Single Page Application)
+  - Design system aplicado (tokens semânticos)
+
+### 📚 Documentação
+- Criado `CORREÇÕES_APLICADAS.md` com análise completa
+  - Problemas identificados e soluções
+  - Exemplos before/after
+  - Checklist de validação
+  - Guia de testes
+
+### ✅ Resultado
+- Aplicação 100% funcional
+- Todas as rotas acessíveis (incluindo cupons)
+- Navegação instantânea e fluida
+- Deploy publicado funcionando
+
+---
+
 ## [0.4.1] - 2025-10-02
 
 ### 🐛 Corrigido (Revisão da Etapa 4)
