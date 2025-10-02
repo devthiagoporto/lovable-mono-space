@@ -44,7 +44,8 @@ Sistema completo de gerenciamento de ingressos para eventos, com autenticação 
 - Whitelist de tipos elegíveis
 - Ordem de descontos: cortesia → valor → percentual
 - Arredondamento decimal preciso
-- Ver: `ETAPA4_README.md` e `ETAPA4_REVISAO.md`
+- **Testes**: 85 testes (75% cobertura)
+- Ver: `ETAPA4_README.md`, `ETAPA4_REVISAO.md`, `TESTES_ETAPA4.md`
 
 ## 🌐 Estrutura de Rotas
 
