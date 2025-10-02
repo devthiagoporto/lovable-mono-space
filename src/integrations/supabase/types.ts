@@ -779,39 +779,7 @@ export type Database = {
       }
     }
     Views: {
-      current_user_memberships: {
-        Row: {
-          role: Database["public"]["Enums"]["role_type"] | null
-          tenant_id: string | null
-          user_id: string | null
-        }
-        Insert: {
-          role?: Database["public"]["Enums"]["role_type"] | null
-          tenant_id?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          role?: Database["public"]["Enums"]["role_type"] | null
-          tenant_id?: string | null
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_roles_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_roles_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "app_users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      [_ in never]: never
     }
     Functions: {
       has_role: {
