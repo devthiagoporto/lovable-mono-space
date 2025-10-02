@@ -6,8 +6,13 @@
  * @returns boolean indicating if CPF is valid
  */
 export function isValidCPF(cpf: string): boolean {
-  // Remove non-numeric characters
-  const cleaned = cpf.replace(/\D/g, "");
+  // Remove non-numeric characters and trim spaces
+  const cleaned = cpf.trim().replace(/\D/g, "");
+  
+  // Check for empty string
+  if (!cleaned || cleaned.length === 0) {
+    return false;
+  }
   
   // Basic length check
   if (cleaned.length !== 11) {

@@ -128,6 +128,7 @@ Atualmente implementados:
 | `npm test` | Executa todos os testes com Vitest |
 | `npm run test:watch` | Executa testes em modo watch (auto-reload) |
 | `npm run test:ui` | Abre interface visual do Vitest |
+| `npm run test:coverage` | Executa testes com relatório de cobertura |
 
 ### Checklist de Qualidade
 
@@ -137,8 +138,8 @@ Antes de fazer deploy ou commit, execute:
 # 1. Verificar lint
 npm run lint
 
-# 2. Executar testes
-npm test
+# 2. Executar testes com cobertura
+npm run test:coverage
 
 # 3. Fazer build
 npm run build
@@ -146,6 +147,13 @@ npm run build
 # 4. Testar build localmente
 npm run preview
 ```
+
+### Meta de Cobertura
+
+- **Linhas**: ≥70%
+- **Funções**: ≥70%
+- **Branches**: ≥70%
+- **Statements**: ≥70%
 
 ## 🌐 Rotas Disponíveis
 
