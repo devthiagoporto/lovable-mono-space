@@ -31,6 +31,7 @@ const EventPublic = () => {
   const [validating, setValidating] = useState(false);
 
   const [cpf, setCpf] = useState('');
+  const [couponCode, setCouponCode] = useState('');
   const [cart, setCart] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -138,15 +139,29 @@ const EventPublic = () => {
         eventId: event.id,
         buyerCpf: cpf.replace(/\D/g, ''),
         items,
+        couponCodes: couponCode ? [couponCode.toUpperCase()] : undefined,
       });
 
       if (result.ok) {
+        const summary = result.summary!;
+        let description = `${summary.totalItems} ingressos`;
+        
+        if (summary.pricing) {
+          description += `\nSubtotal: ${formatBRL(summary.pricing.subtotal)}`;
+          if (summary.pricing.discounts.length > 0) {
+            const totalDiscount = summary.pricing.discounts.reduce((sum, d) => sum + d.amount, 0);
+            description += `\nDesconto: ${formatBRL(totalDiscount)}`;
+          }
+          description += `\nTotal: ${formatBRL(summary.pricing.total)}`;
+        }
+        
         toast({
           title: 'Carrinho validado!',
-          description: `Total: ${result.summary!.totalItems} ingressos`,
+          description,
         });
-        if (result.summary!.warnings.length > 0) {
-          result.summary!.warnings.forEach((warning) => {
+        
+        if (summary.warnings.length > 0) {
+          summary.warnings.forEach((warning) => {
             toast({
               title: 'Atenção',
               description: warning,
@@ -224,7 +239,7 @@ const EventPublic = () => {
           <CardHeader>
             <CardTitle>Seus Dados</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <div>
               <Label htmlFor="cpf">CPF *</Label>
               <Input
@@ -233,6 +248,16 @@ const EventPublic = () => {
                 onChange={(e) => setCpf(formatCPF(e.target.value))}
                 placeholder="000.000.000-00"
                 maxLength={14}
+              />
+            </div>
+            <div>
+              <Label htmlFor="coupon">Cupom de Desconto (opcional)</Label>
+              <Input
+                id="coupon"
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                placeholder="Digite o código"
+                className="uppercase"
               />
             </div>
           </CardContent>

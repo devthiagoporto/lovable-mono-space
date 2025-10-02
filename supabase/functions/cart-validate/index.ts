@@ -16,6 +16,7 @@ interface CartValidationRequest {
   eventId: string;
   buyerCpf: string;
   items: CartItem[];
+  couponCodes?: string[];
 }
 
 interface ValidationError {
@@ -23,6 +24,13 @@ interface ValidationError {
   message: string;
   ticketTypeId?: string;
   lotId?: string;
+  couponCode?: string;
+}
+
+interface Discount {
+  code: string;
+  amount: number;
+  appliedTo: string[];
 }
 
 Deno.serve(async (req) => {
@@ -36,10 +44,10 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const body: CartValidationRequest = await req.json();
-    const { tenantId, eventId, buyerCpf, items } = body;
+    const { tenantId, eventId, buyerCpf, items, couponCodes = [] } = body;
 
     const startTime = Date.now();
-    console.log('Validating cart:', { tenantId, eventId, buyerCpf, itemCount: items.length });
+    console.log('Validating cart:', { tenantId, eventId, buyerCpf, itemCount: items.length, couponCodes });
 
     // Normalize and validate CPF
     const normalizedCpf = buyerCpf.replace(/\D/g, '');
@@ -78,17 +86,30 @@ Deno.serve(async (req) => {
     const limits = event.regras_limite || {};
     console.log('Event limits loaded:', limits);
 
-    // BATCH QUERY 2: Load lots, ticket types, and sectors in parallel
+    // BATCH QUERY 2: Load lots, ticket types, and coupons in parallel
     const lotIds = items.map((i) => i.lotId);
     const ticketTypeIds = items.map((i) => i.ticketTypeId);
     
-    const [lotsResult, ticketTypesResult] = await Promise.all([
+    const queries = [
       supabase.from('lots').select('*').in('id', lotIds),
       supabase.from('ticket_types').select('*, sectors(*)').in('id', ticketTypeIds),
-    ]);
+    ];
 
-    const { data: lots, error: lotsError } = lotsResult;
-    const { data: ticketTypes, error: typesError } = ticketTypesResult;
+    // Load coupons if provided
+    if (couponCodes.length > 0) {
+      queries.push(
+        supabase.from('coupons')
+          .select('*')
+          .eq('event_id', eventId)
+          .eq('ativo', true)
+          .in('codigo', couponCodes.map(c => c.toUpperCase()))
+      );
+    }
+
+    const results = await Promise.all(queries);
+    const { data: lots, error: lotsError } = results[0];
+    const { data: ticketTypes, error: typesError } = results[1];
+    const coupons = couponCodes.length > 0 ? results[2].data : [];
 
     if (lotsError || !lots || lots.length === 0) {
       console.error('Lots not found:', { lotIds, error: lotsError });
@@ -115,8 +136,22 @@ Deno.serve(async (req) => {
     console.log('Batch queries completed:', {
       lotsCount: lots.length,
       typesCount: ticketTypes.length,
+      couponsFound: coupons?.length || 0,
       elapsed: Date.now() - startTime,
     });
+
+    // Validate coupons exist
+    if (couponCodes.length > 0 && (!coupons || coupons.length !== couponCodes.length)) {
+      const foundCodes = (coupons || []).map((c: any) => c.codigo);
+      const missingCodes = couponCodes.filter(code => !foundCodes.includes(code.toUpperCase()));
+      missingCodes.forEach(code => {
+        errors.push({
+          code: 'COUPON_NOT_FOUND',
+          couponCode: code,
+          message: `Cupom "${code}" não encontrado ou inativo.`,
+        });
+      });
+    }
 
     // Aggregate quantities first
     const now = new Date();
@@ -126,7 +161,10 @@ Deno.serve(async (req) => {
     const quantityByLot: Record<string, number> = {};
     const quantityBySector: Record<string, number> = {};
 
-    // First pass: aggregate quantities
+    // Calculate subtotal by type
+    const subtotalByType: Record<string, number> = {};
+
+    // First pass: aggregate quantities and calculate subtotals
     for (const item of items) {
       if (item.quantity <= 0) {
         errors.push({
@@ -140,11 +178,17 @@ Deno.serve(async (req) => {
       totalQuantity += item.quantity;
       quantityByType[item.ticketTypeId] = (quantityByType[item.ticketTypeId] || 0) + item.quantity;
       quantityByLot[item.lotId] = (quantityByLot[item.lotId] || 0) + item.quantity;
+
+      // Calculate subtotal
+      const lot = lots.find((l: any) => l.id === item.lotId);
+      if (lot) {
+        subtotalByType[item.ticketTypeId] = (subtotalByType[item.ticketTypeId] || 0) + (lot.preco * item.quantity);
+      }
     }
 
-    // Validate each item
+    // Validate each item (stock, windows, etc.)
     for (const item of items) {
-      const lot = lots.find((l) => l.id === item.lotId);
+      const lot = lots.find((l: any) => l.id === item.lotId);
       if (!lot) {
         errors.push({
           code: 'LOT_NOT_FOUND',
@@ -154,7 +198,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const ticketType = ticketTypes.find((t) => t.id === item.ticketTypeId);
+      const ticketType = ticketTypes.find((t: any) => t.id === item.ticketTypeId);
       if (!ticketType) {
         errors.push({
           code: 'TYPE_NOT_FOUND',
@@ -219,7 +263,7 @@ Deno.serve(async (req) => {
 
     // RULE 3: Check max per type per order (aggregate validation)
     for (const [typeId, qty] of Object.entries(quantityByType)) {
-      const ticketType = ticketTypes.find((t) => t.id === typeId);
+      const ticketType = ticketTypes.find((t: any) => t.id === typeId);
       if (ticketType && ticketType.max_por_pedido && qty > ticketType.max_por_pedido) {
         errors.push({
           code: 'LIMIT_MAX_POR_TIPO_POR_PEDIDO',
@@ -270,7 +314,7 @@ Deno.serve(async (req) => {
       for (const [typeId, qty] of Object.entries(quantityByType)) {
         const current = ticketsByCpfByType[typeId] || 0;
         if (current + qty > limits.maxPorCPFPorTipo) {
-          const ticketType = ticketTypes.find((t) => t.id === typeId);
+          const ticketType = ticketTypes.find((t: any) => t.id === typeId);
           errors.push({
             code: 'LIMIT_MAX_POR_CPF_POR_TIPO',
             ticketTypeId: typeId,
@@ -290,23 +334,129 @@ Deno.serve(async (req) => {
 
     // Check sector capacity (WARNING only, does not block)
     for (const [sectorId, qty] of Object.entries(quantityBySector)) {
-      const ticketType = ticketTypes.find((t) => t.sectors?.id === sectorId);
+      const ticketType = ticketTypes.find((t: any) => t.sectors?.id === sectorId);
       if (ticketType && ticketType.sectors) {
         const sector = ticketType.sectors;
         
-        // Get all lots for this sector to calculate total allocation
         const { data: sectorLots } = await supabase
           .from('lots')
           .select('qtd_total, ticket_types!inner(sector_id)')
           .eq('ticket_types.sector_id', sectorId);
 
         if (sectorLots) {
-          const totalAllocated = sectorLots.reduce((sum, lot) => sum + lot.qtd_total, 0);
+          const totalAllocated = sectorLots.reduce((sum: number, lot: any) => sum + lot.qtd_total, 0);
           if (totalAllocated > sector.capacidade) {
             warnings.push(
               `Atenção: O setor "${sector.nome}" tem capacidade de ${sector.capacidade}, mas ${totalAllocated} ingressos foram alocados nos lotes. A capacidade pode ser excedida.`
             );
           }
+        }
+      }
+    }
+
+    // ===== COUPON VALIDATION AND DISCOUNT CALCULATION =====
+    const discounts: Discount[] = [];
+    let totalSubtotal = Object.values(subtotalByType).reduce((sum, val) => sum + val, 0);
+    
+    if (coupons && coupons.length > 0) {
+      // Check combinability
+      const nonCombinable = coupons.filter((c: any) => !c.combinavel);
+      if (nonCombinable.length > 1) {
+        errors.push({
+          code: 'COUPON_NOT_COMBINABLE',
+          message: `Os cupons ${nonCombinable.map((c: any) => c.codigo).join(', ')} não são combináveis entre si.`,
+        });
+      }
+
+      if (nonCombinable.length > 0 && coupons.length > 1 && nonCombinable.length < coupons.length) {
+        errors.push({
+          code: 'COUPON_NOT_COMBINABLE',
+          message: `O cupom ${nonCombinable[0].codigo} não é combinável com outros cupons.`,
+        });
+      }
+
+      // BATCH QUERY: Load coupon usage by CPF for limit check
+      const couponIds = coupons.map((c: any) => c.id);
+      const { data: couponUsageData } = await supabase
+        .from('coupon_usage')
+        .select('coupon_id')
+        .eq('cpf', normalizedCpf)
+        .in('coupon_id', couponIds);
+
+      const usageByCoupon: Record<string, number> = {};
+      if (couponUsageData) {
+        for (const usage of couponUsageData) {
+          usageByCoupon[usage.coupon_id] = (usageByCoupon[usage.coupon_id] || 0) + 1;
+        }
+      }
+
+      // Validate and calculate discounts for each coupon
+      for (const coupon of coupons as any[]) {
+        // Check total limit
+        if (coupon.limites?.limiteTotal && coupon.uso_total >= coupon.limites.limiteTotal) {
+          errors.push({
+            code: 'COUPON_LIMIT_EXCEEDED',
+            couponCode: coupon.codigo,
+            message: `Cupom "${coupon.codigo}" atingiu o limite de usos (${coupon.limites.limiteTotal}).`,
+          });
+          continue;
+        }
+
+        // Check CPF limit
+        if (coupon.limites?.limitePorCPF) {
+          const currentUsage = usageByCoupon[coupon.id] || 0;
+          if (currentUsage >= coupon.limites.limitePorCPF) {
+            errors.push({
+              code: 'COUPON_CPF_LIMIT_EXCEEDED',
+              couponCode: coupon.codigo,
+              message: `Você já utilizou o cupom "${coupon.codigo}" o número máximo de vezes (${coupon.limites.limitePorCPF}).`,
+            });
+            continue;
+          }
+        }
+
+        // Determine which types are eligible (whitelist)
+        const eligibleTypes = coupon.limites?.whitelistTipos?.length > 0
+          ? coupon.limites.whitelistTipos
+          : Object.keys(quantityByType);
+
+        const appliedTo: string[] = [];
+        let discountAmount = 0;
+
+        // Calculate discount based on type
+        if (coupon.tipo === 'cortesia') {
+          // Cortesia: zero out eligible items
+          for (const typeId of eligibleTypes) {
+            if (subtotalByType[typeId]) {
+              discountAmount += subtotalByType[typeId];
+              appliedTo.push(typeId);
+            }
+          }
+        } else {
+          // Calculate eligible subtotal
+          let eligibleSubtotal = 0;
+          for (const typeId of eligibleTypes) {
+            if (subtotalByType[typeId]) {
+              eligibleSubtotal += subtotalByType[typeId];
+              appliedTo.push(typeId);
+            }
+          }
+
+          if (coupon.tipo === 'percentual') {
+            discountAmount = (eligibleSubtotal * coupon.valor) / 100;
+          } else if (coupon.tipo === 'valor') {
+            discountAmount = Math.min(coupon.valor, eligibleSubtotal);
+          }
+        }
+
+        if (appliedTo.length > 0) {
+          discounts.push({
+            code: coupon.codigo,
+            amount: discountAmount,
+            appliedTo,
+          });
+        } else {
+          warnings.push(`Cupom "${coupon.codigo}" não se aplica a nenhum item do carrinho.`);
         }
       }
     }
@@ -324,10 +474,18 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Calculate final total
+    const totalDiscount = discounts.reduce((sum, d) => sum + d.amount, 0);
+    const finalTotal = Math.max(0, totalSubtotal - totalDiscount);
+
     // Success response
     const totalElapsed = Date.now() - startTime;
     console.log('Validation successful:', {
       totalItems: totalQuantity,
+      subtotal: totalSubtotal,
+      totalDiscount,
+      finalTotal,
+      discountCount: discounts.length,
       warningCount: warnings.length,
       elapsed: totalElapsed,
     });
@@ -339,6 +497,11 @@ Deno.serve(async (req) => {
           totalItems: totalQuantity,
           byType: Object.entries(quantityByType).map(([ticketTypeId, qty]) => ({ ticketTypeId, qty })),
           byLot: Object.entries(quantityByLot).map(([lotId, qty]) => ({ lotId, qty })),
+          pricing: {
+            subtotal: totalSubtotal,
+            discounts,
+            total: finalTotal,
+          },
           warnings,
         },
       }),

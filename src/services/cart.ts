@@ -11,6 +11,7 @@ export interface CartValidationRequest {
   eventId: string;
   buyerCpf: string;
   items: CartItem[];
+  couponCodes?: string[];
 }
 
 export interface ValidationError {
@@ -26,6 +27,15 @@ export interface CartValidationResponse {
     totalItems: number;
     byType: Array<{ ticketTypeId: string; qty: number }>;
     byLot: Array<{ lotId: string; qty: number }>;
+    pricing?: {
+      subtotal: number;
+      discounts: Array<{
+        code: string;
+        amount: number;
+        appliedTo: string[];
+      }>;
+      total: number;
+    };
     warnings: string[];
   };
   errors?: ValidationError[];
