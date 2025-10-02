@@ -1,0 +1,7 @@
+# Features directory
+# This directory will contain modular features:
+# - auth: Authentication and authorization
+# - events: Event management
+# - coupons: Coupon system
+# - checkout: Checkout flow
+# - checkin: Check-in system
