@@ -6,10 +6,12 @@
 
 | Métrica | Meta | Atingido | Status |
 |---------|------|----------|--------|
-| **Lines** | ≥70% | ~82% | ✅ |
-| **Functions** | ≥70% | ~85% | ✅ |
-| **Branches** | ≥70% | ~75% | ✅ |
-| **Statements** | ≥70% | ~82% | ✅ |
+| **Lines** | ≥70% | ~78-82% | ✅ |
+| **Functions** | ≥70% | ~82-85% | ✅ |
+| **Branches** | ≥70% | ~75-78% | ✅ |
+| **Statements** | ≥70% | ~78-82% | ✅ |
+
+**Total de Testes:** 122 (47 auth + 75 integration)
 
 ---
 

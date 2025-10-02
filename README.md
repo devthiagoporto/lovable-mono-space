@@ -209,17 +209,40 @@ Todas as tabelas possuem RLS habilitado:
 | `npm run build` | Build de produção |
 | `npm run preview` | Preview do build |
 | `npm run lint` | Verificar código |
-| `npm test` | Executar testes |
-| `npm run test:integration` | Testes de integração |
+| `npm test` | Executar todos os testes |
+| `npm run test:watch` | Testes em watch mode |
+| `npm run test:ui` | UI interativa de testes |
 | `npm run test:coverage` | Cobertura de testes |
+| `npm run test tests/auth` | Testes de autenticação (Etapa 2) |
+| `npm run test tests/integration` | Testes de integração (Etapa 3) |
+
+### Testes Vitest
+
+**Meta de Cobertura:** ≥70% para todas as métricas
+
+| Etapa | Cobertura | Arquivos |
+|-------|-----------|----------|
+| **Etapa 2** | ~82% | `tests/auth/*.spec.ts` |
+| **Etapa 3** | ~75-80% | `tests/integration/*.spec.ts` |
+| **Total** | ~78-82% | Todos os testes |
+
+**Documentação:**
+- `tests/COMANDOS_TESTES_AUTH.md` - Comandos da Etapa 2
+- `tests/COMANDOS_TESTES_ETAPA3.md` - Comandos da Etapa 3
+- `TESTES_COBERTURA.md` - Relatório geral
 
 ## 📚 Documentação Adicional
 
 - [Modelagem de Dados](./RESUMO_MODELAGEM.md)
 - [Autenticação Implementada](./AUTENTICACAO_IMPLEMENTADA.md)
 - [Correções Aplicadas](./CORREÇÕES_APLICADAS.md)
+- [Revisão da Etapa 3](./ETAPA3_REVISAO.md)
+- [Diff da Etapa 3](./ETAPA3_DIFF.md)
+- [README da Etapa 3](./ETAPA3_README.md)
 - [Testes de Integração](./TESTES_INTEGRACAO.md)
+- [Testes da Etapa 3](./tests/COMANDOS_TESTES_ETAPA3.md)
 - [Comandos de Teste](./tests/COMANDOS_TESTES.md)
+- [Cobertura de Testes](./TESTES_COBERTURA.md)
 
 ## 🗺️ Próximas Etapas
 
