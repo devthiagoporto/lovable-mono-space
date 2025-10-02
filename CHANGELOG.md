@@ -125,13 +125,94 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **TESTES_COBERTURA.md**: Análise completa de cobertura
 - **RESUMO_TESTES.md**: Resumo executivo para stakeholders
 
-## Próximas Versões Planejadas
+## [0.2.0] - 2025-10-02
 
-### [0.2.0] - Schema do Banco de Dados
-- [ ] Tabelas: tenants, events, sectors, ticket_types, batches, tickets
-- [ ] RLS policies
-- [ ] Seeds iniciais
-- [ ] Migrations
+### ✨ Adicionado (Modelagem de Dados)
+
+#### Schema do Banco de Dados
+- **15 tabelas** criadas com relacionamentos completos
+- **5 ENUMs** customizados (role_type, order_status, ticket_status, coupon_type, checkin_result)
+- **40+ índices** para performance de queries
+
+#### Tabelas Principais
+- `tenants`: Organizadores (multi-tenant)
+- `app_users`: Usuários da aplicação
+- `user_roles`: RBAC (Role-Based Access Control)
+- `events`: Eventos
+- `sectors`: Setores/áreas (sem assentos numerados)
+- `ticket_types`: Tipos de ingresso por setor
+- `lots`: Lotes progressivos de venda
+- `orders`: Pedidos de compra
+- `tickets`: Ingressos nomeados (com CPF)
+- `transfers`: Transferências de ingressos
+- `coupons`: Cupons de desconto
+- `coupon_usage`: Uso de cupons
+- `checkins`: Check-ins realizados
+- `revocations`: Revogações (CRL)
+- `audit_logs`: Auditoria geral
+
+#### Row Level Security (RLS)
+- **RLS habilitado** em todas as 15 tabelas
+- **3 funções helper** com SECURITY DEFINER:
+  - `has_role(tenant, role)`: Verifica se usuário tem role específica
+  - `is_tenant_admin(tenant)`: Verifica se é admin do tenant
+  - `has_tenant_access(tenant)`: Verifica acesso ao tenant
+- **50+ políticas RLS** granulares:
+  - Público: Eventos publicados visíveis a todos
+  - Membros do tenant: Acesso completo aos dados do tenant
+  - Usuários: Veem seus próprios pedidos e ingressos
+  - Admins: Gestão completa dentro do tenant
+
+#### Seeds de Teste
+- **1 Tenant**: "Demo Org" (ID: `11111111-1111-1111-1111-111111111111`)
+- **2 Usuários**:
+  - Admin Demo (ID: `22222222-2222-2222-2222-222222222222`) - `organizer_admin`
+  - Operador Portão A (ID: `33333333-3333-3333-3333-333333333333`) - `checkin_operator`
+- **1 Evento**: "Festa Teste" (ID: `44444444-4444-4444-4444-444444444444`)
+  - 3 setores (Pista, Frontstage, Camarote)
+  - 6 tipos de ingresso (2 por setor: Inteira e Meia)
+  - 6 lotes (1º Lote com 200 unidades cada)
+- **2 Cupons**:
+  - `INFLU_X`: 10% desconto (limite: 200 usos)
+  - `CORTESIA`: 100% desconto (limite: 50 usos)
+
+#### Documentação
+- **SCHEMA_DATABASE.md**: Documentação completa do schema
+- **SCRIPT_SQL_COMPLETO.sql**: Script SQL consolidado
+
+### 🔒 Segurança
+
+#### RLS Implementado
+- Isolamento completo por tenant
+- Políticas granulares por operação (SELECT, INSERT, UPDATE, DELETE)
+- Funções SECURITY DEFINER para verificação de roles
+
+#### Validações
+- Constraints CHECK em valores numéricos (≥ 0)
+- Foreign keys com CASCADE/SET NULL apropriados
+- Unique constraints (subdomínio, código de cupom por evento)
+
+### 📊 Métricas
+
+- **15 tabelas** criadas
+- **40+ índices** configurados
+- **50+ políticas RLS** ativas
+- **3 funções** SECURITY DEFINER
+- **5 ENUMs** customizados
+
+### 🐛 Corrigido
+
+- Removida view `current_user_memberships` que causava alerta de segurança
+- Política de tenants ajustada para consultar `user_roles` diretamente
+
+### 📝 Observações
+
+- Schema preparado para **multi-tenant** com isolamento completo
+- Sistema **sem assentos numerados** (apenas setores/áreas)
+- Suporte a **QR Codes** com JWK (campos já previstos em `tenants` e `tickets`)
+- **LGPD-ready**: CPF armazenado apenas quando necessário
+
+---
 
 ### [0.3.0] - Autenticação
 - [ ] Sistema de login/logout
