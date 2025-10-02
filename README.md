@@ -26,6 +26,13 @@ Sistema completo de gerenciamento de ingressos para eventos, com autenticação 
 - Edge Functions para provisionamento de operadores
 - Isolamento completo por tenant
 
+### Etapa 3: CRUD de Eventos e Validação
+- CRUD completo (Event, Sector, TicketType, Lot)
+- Página pública do evento (`/e/:eventId`)
+- Edge Function `cart-validate` com validação de limites
+- Regras de negócio (limites por pedido, CPF, janelas de venda)
+- Ver: `ETAPA3_README.md`
+
 ## 🌐 Estrutura de Rotas
 
 | Rota | Proteção | Descrição |
@@ -33,7 +40,10 @@ Sistema completo de gerenciamento de ingressos para eventos, com autenticação 
 | `/` | Pública | Landing page |
 | `/login` | Pública | Login geral |
 | `/dashboard` | Autenticado | Dashboard principal |
+| `/dashboard/events` | Autenticado | Lista de eventos |
+| `/dashboard/events/:id` | Autenticado | Criar/editar evento |
 | `/dashboard/operators` | Admin | Gestão de operadores |
+| `/e/:eventId` | Pública | Página do evento |
 | `/checkin` | `checkin_operator` | Portal de check-in |
 
 ## 🔧 Setup do Projeto

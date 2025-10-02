@@ -30,16 +30,24 @@ const Dashboard = () => {
             </ul>
           </div>
 
-          {canManageOperators && (
-            <div>
+          <div className="space-y-2">
+            <Button
+              onClick={() => (window.location.href = '/dashboard/events')}
+              className="w-full"
+            >
+              Gerenciar Eventos
+            </Button>
+
+            {canManageOperators && (
               <Button
                 onClick={() => (window.location.href = '/dashboard/operators')}
                 className="w-full"
+                variant="outline"
               >
                 Gerenciar Operadores
               </Button>
-            </div>
-          )}
+            )}
+          </div>
 
           <div>
             <Button

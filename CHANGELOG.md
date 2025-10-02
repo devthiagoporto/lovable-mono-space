@@ -5,6 +5,23 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [0.3.0] - 2025-10-02
+
+### ✨ Adicionado (Etapa 3 - CRUD e Validação)
+- CRUD de eventos, setores, tipos e lotes
+- Página pública do evento com seletor de ingressos
+- Edge Function `cart-validate` com validação completa
+- Serviços: events, sectors, ticketTypes, lots, cart
+- Documentação: `ETAPA3_README.md`
+
+## [0.2.0] - 2025-10-02
+
+### ✨ Adicionado (Etapa 2 - Autenticação)
+- Sistema de autenticação e RBAC
+- Edge Functions administrativas
+- Portal do operador
+- Testes de autenticação
+
 ## [0.1.0] - 2025-10-02
 
 ### ✨ Adicionado (Etapa 0 - Scaffold)
