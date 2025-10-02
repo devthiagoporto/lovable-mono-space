@@ -52,18 +52,32 @@ npm install
 
 ### Passo 3: Configurar Variáveis de Ambiente
 
-O Lovable Cloud já configura automaticamente as variáveis de ambiente necessárias. O arquivo `.env` é gerado automaticamente e contém:
+**IMPORTANTE**: O Lovable Cloud já configura automaticamente as variáveis de ambiente.
 
+Quando você trabalha no Lovable, o arquivo `.env` é **gerado automaticamente** e contém:
 - `VITE_SUPABASE_URL`: URL do projeto Supabase
-- `VITE_SUPABASE_ANON_KEY`: Chave pública do Supabase
+- `VITE_SUPABASE_PUBLISHABLE_KEY`: Chave pública do Supabase
+- `VITE_SUPABASE_PROJECT_ID`: ID do projeto
 
-**Nota**: Não é necessário criar ou editar o arquivo `.env` manualmente. Ele é gerenciado automaticamente pelo Lovable Cloud.
+**Para desenvolvimento local fora do Lovable:**
 
-Se você quiser ver o formato das variáveis, consulte o arquivo `.env.example`:
-
+1. Copie o arquivo de exemplo:
 ```bash
-cat .env.example
+cp .env.example .env
 ```
+
+2. Obtenha as credenciais do Lovable Cloud:
+   - Abra seu projeto no Lovable
+   - Clique em "Manage Cloud" (botão do backend)
+   - Copie a URL e a Publishable Key
+
+3. Edite o arquivo `.env` com suas credenciais:
+```bash
+VITE_SUPABASE_URL=https://uipwbatjrxfdnpxefmjj.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=eyJhbGc...sua_key_aqui
+```
+
+**Nota**: Nunca commite o arquivo `.env` com credenciais reais no Git. Use apenas o `.env.example` como template.
 
 ### Passo 4: Executar o Projeto
 
@@ -107,13 +121,31 @@ Atualmente implementados:
 
 | Script | Descrição |
 |--------|-----------|
-| `npm run dev` | Inicia o servidor de desenvolvimento |
+| `npm run dev` | Inicia o servidor de desenvolvimento (porta 8080) |
 | `npm run build` | Cria build de produção |
 | `npm run preview` | Preview do build de produção |
-| `npm run lint` | Executa ESLint |
-| `npm test` | Executa todos os testes |
-| `npm run test:watch` | Executa testes em modo watch |
-| `npm run test:ui` | Abre UI do Vitest |
+| `npm run lint` | Executa ESLint para verificar código |
+| `npm test` | Executa todos os testes com Vitest |
+| `npm run test:watch` | Executa testes em modo watch (auto-reload) |
+| `npm run test:ui` | Abre interface visual do Vitest |
+
+### Checklist de Qualidade
+
+Antes de fazer deploy ou commit, execute:
+
+```bash
+# 1. Verificar lint
+npm run lint
+
+# 2. Executar testes
+npm test
+
+# 3. Fazer build
+npm run build
+
+# 4. Testar build localmente
+npm run preview
+```
 
 ## 🌐 Rotas Disponíveis
 
