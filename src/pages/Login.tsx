@@ -30,21 +30,17 @@ const Login = () => {
           description: error.message || 'Credenciais inválidas',
           variant: 'destructive',
         });
+        setLoading(false);
         return;
       }
 
-      // Wait a bit for memberships to load
-      setTimeout(() => {
-        const hasCheckinRole = memberships.some((m) => m.role === 'checkin_operator');
-        
-        if (isCheckinPortal) {
-          navigate('/checkin');
-        } else if (hasCheckinRole) {
-          navigate('/checkin');
-        } else {
-          navigate('/dashboard');
-        }
-      }, 500);
+      toast({
+        title: 'Login realizado',
+        description: 'Redirecionando...',
+      });
+
+      // Navigation will be handled by auth state change
+      // The redirect logic is now in the AuthContext effect
 
     } catch (error: any) {
       toast({
@@ -52,7 +48,6 @@ const Login = () => {
         description: error.message,
         variant: 'destructive',
       });
-    } finally {
       setLoading(false);
     }
   };

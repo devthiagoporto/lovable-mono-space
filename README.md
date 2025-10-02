@@ -1,255 +1,226 @@
-# SaaS Multi-Tenant de Venda de Ingressos
+# Sistema de Ingressos Multi-Tenant
 
-Sistema de venda de ingressos multi-tenant desenvolvido com React, TypeScript, Vite e Lovable Cloud (Supabase).
+Sistema completo de gerenciamento de ingressos para eventos, com autenticação multi-tenant, RBAC e portal de check-in.
 
-## 🚀 Stack Tecnológica
+## 🚀 Arquitetura
 
-- **Frontend**: React 18 + TypeScript + Vite
-- **Backend**: Lovable Cloud (PostgreSQL + Edge Functions)
-- **UI**: shadcn/ui + Tailwind CSS
-- **Testes**: Vitest + @testing-library/react
-- **Qualidade**: ESLint + Prettier
-- **Internacionalização**: pt-BR (datas em formato dd/MM/yyyy HH:mm)
-- **Moeda**: BRL (Real Brasileiro)
-- **Fuso Horário**: America/Sao_Paulo
+- **Frontend:** React + Vite + TypeScript + Tailwind CSS
+- **Backend:** Supabase (Auth + Postgres + Edge Functions)
+- **Idioma:** pt-BR
+- **Moeda:** BRL (R$)
+- **Fuso Horário:** America/Sao_Paulo
 
-## 📁 Estrutura do Projeto
+## ✅ Funcionalidades Implementadas
 
-```
-/src
-  /app                  # Rotas e páginas
-  /components           # Componentes React reutilizáveis
-  /features             # Features modulares (auth, events, coupons, checkout, checkin)
-  /lib                  # Utilitários e configurações
-    /utils              # Funções utilitárias (cpf, currency, date)
-  /services             # Chamadas às Edge Functions
-  /test                 # Configuração de testes
-/supabase
-  /functions            # Edge Functions (serverless)
-    /health             # Health check endpoint
-/tests                  # Testes unitários e de integração
-```
+### Etapa 1: Modelagem de Dados
+- 15 tabelas com RLS habilitado
+- 5 tipos ENUM customizados
+- 3 funções de segurança (SECURITY DEFINER)
+- 33 políticas RLS para isolamento multi-tenant
+- Seed data para testes
 
-## 🛠️ Setup do Projeto
+### Etapa 2: Autenticação e RBAC
+- Autenticação via Supabase Auth (e-mail/senha)
+- Sistema de roles: `admin_saas`, `organizer_admin`, `organizer_staff`, `checkin_operator`, `buyer`
+- Portal dedicado para operadores de check-in (`/checkin`)
+- Edge Functions para provisionamento de operadores
+- Isolamento completo por tenant
+
+## 🌐 Estrutura de Rotas
+
+| Rota | Proteção | Descrição |
+|------|----------|-----------|
+| `/` | Pública | Landing page |
+| `/login` | Pública | Login geral |
+| `/dashboard` | Autenticado | Dashboard principal |
+| `/dashboard/operators` | Admin | Gestão de operadores |
+| `/checkin` | `checkin_operator` | Portal de check-in |
+
+## 🔧 Setup do Projeto
 
 ### Pré-requisitos
-
 - Node.js 18+ e npm
 - Conta no Lovable (https://lovable.dev)
 
-### Passo 1: Clone o Repositório
-
+### Instalação
 ```bash
+# Clone o repositório
 git clone <YOUR_GIT_URL>
 cd <YOUR_PROJECT_NAME>
-```
 
-### Passo 2: Instalar Dependências
-
-```bash
+# Instale dependências
 npm install
-```
 
-### Passo 3: Configurar Variáveis de Ambiente
-
-**IMPORTANTE**: O Lovable Cloud já configura automaticamente as variáveis de ambiente.
-
-Quando você trabalha no Lovable, o arquivo `.env` é **gerado automaticamente** e contém:
-- `VITE_SUPABASE_URL`: URL do projeto Supabase
-- `VITE_SUPABASE_PUBLISHABLE_KEY`: Chave pública do Supabase
-- `VITE_SUPABASE_PROJECT_ID`: ID do projeto
-
-**Para desenvolvimento local fora do Lovable:**
-
-1. Copie o arquivo de exemplo:
-```bash
-cp .env.example .env
-```
-
-2. Obtenha as credenciais do Lovable Cloud:
-   - Abra seu projeto no Lovable
-   - Clique em "Manage Cloud" (botão do backend)
-   - Copie a URL e a Publishable Key
-
-3. Edite o arquivo `.env` com suas credenciais:
-```bash
-VITE_SUPABASE_URL=https://uipwbatjrxfdnpxefmjj.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=eyJhbGc...sua_key_aqui
-```
-
-**Nota**: Nunca commite o arquivo `.env` com credenciais reais no Git. Use apenas o `.env.example` como template.
-
-### Passo 4: Executar o Projeto
-
-```bash
-# Modo desenvolvimento
+# Execute em desenvolvimento
 npm run dev
-
-# Build de produção
-npm run build
-
-# Preview do build
-npm run preview
 ```
 
-O projeto estará disponível em `http://localhost:8080`
+### Variáveis de Ambiente
+
+O Lovable Cloud configura automaticamente:
+```env
+VITE_SUPABASE_URL=https://uipwbatjrxfdnpxefmjj.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGci...
+VITE_SUPABASE_PROJECT_ID=uipwbatjrxfdnpxefmjj
+```
+
+## 🔌 Edge Functions
+
+### `operators-create`
+Cria novo operador de check-in (apenas `organizer_admin` ou `admin_saas`).
+
+**Endpoint:** `POST /functions/v1/operators-create`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Body:**
+```json
+{
+  "email": "operador@exemplo.com",
+  "nome": "João Silva",
+  "tenantId": "uuid-do-tenant"
+}
+```
+
+**Resposta (200):**
+```json
+{
+  "userId": "uuid-gerado",
+  "tempPassword": "Check12345678!"
+}
+```
+
+**Erros:**
+- `401`: Token ausente ou inválido
+- `403`: Usuário sem permissão
+- `400`: Campos obrigatórios faltando
+
+### `roles-assign`
+Atribui role a um usuário existente.
+
+**Endpoint:** `POST /functions/v1/roles-assign`
+
+**Body:**
+```json
+{
+  "userId": "uuid-do-usuario",
+  "tenantId": "uuid-do-tenant",
+  "role": "organizer_staff"
+}
+```
+
+**Roles permitidas:**
+- `organizer_staff`
+- `checkin_operator`
+- `buyer`
 
 ## 🧪 Testes
 
-### Executar Testes
-
+### Testes de Integração
 ```bash
 # Executar todos os testes
-npm test
+npm run test:integration
 
-# Executar testes em modo watch
-npm run test:watch
+# Executar com cobertura
+npm run test:coverage
 
-# Executar testes com UI
-npm run test:ui
+# Testes específicos
+npm run test tests/integration/supabase/data-creation.spec.ts
 ```
 
-### Cobertura de Testes
+### Testes Manuais (cURL)
 
-Atualmente implementados:
-- ✅ Testes de validação de CPF (`tests/cpf.spec.ts`)
-- ✅ Testes de formatação de moeda BRL (`tests/formatBRL.spec.ts`)
-- ✅ Testes de formatação de datas (`tests/date.spec.ts`)
-- ✅ Teste de health check da API (`tests/health.spec.ts`)
+**Obter Token:**
+```bash
+# Via localStorage no DevTools
+localStorage.getItem('supabase.auth.token')
+
+# Configurar ambiente
+export TOKEN="seu-token-aqui"
+export SUPABASE_URL="https://uipwbatjrxfdnpxefmjj.supabase.co"
+```
+
+**Criar Operador:**
+```bash
+curl -X POST "${SUPABASE_URL}/functions/v1/operators-create" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "teste@exemplo.com",
+    "nome": "Teste",
+    "tenantId": "11111111-1111-1111-1111-111111111111"
+  }'
+```
+
+**Atribuir Role:**
+```bash
+curl -X POST "${SUPABASE_URL}/functions/v1/roles-assign" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "uuid-do-usuario",
+    "tenantId": "11111111-1111-1111-1111-111111111111",
+    "role": "organizer_staff"
+  }'
+```
+
+Ver `CORREÇÕES_APLICADAS.md` para mais exemplos de testes.
+
+## 🔐 Segurança
+
+### RLS (Row Level Security)
+Todas as tabelas possuem RLS habilitado:
+
+- **Leitura pública:** Apenas `events`, `sectors`, `ticket_types`, `lots` e `coupons` com status publicado
+- **Escrita:** Restrita ao tenant do usuário autenticado
+- **Isolamento:** Queries automáticas filtrando por `tenant_id`
+
+### Roles e Permissões
+- **admin_saas:** Acesso global a todos os tenants
+- **organizer_admin:** Acesso total ao próprio tenant
+- **organizer_staff:** Acesso operacional ao tenant
+- **checkin_operator:** Apenas check-in de ingressos
+- **buyer:** Comprar e visualizar próprios ingressos
+
+### Service Role Key
+**CRÍTICO:** A `SUPABASE_SERVICE_ROLE_KEY` é usada **apenas** nas Edge Functions no servidor. **NUNCA** exponha no frontend.
 
 ## 📝 Scripts Disponíveis
 
 | Script | Descrição |
 |--------|-----------|
-| `npm run dev` | Inicia o servidor de desenvolvimento (porta 8080) |
-| `npm run build` | Cria build de produção |
-| `npm run preview` | Preview do build de produção |
-| `npm run lint` | Executa ESLint para verificar código |
-| `npm test` | Executa todos os testes com Vitest |
-| `npm run test:watch` | Executa testes em modo watch (auto-reload) |
-| `npm run test:ui` | Abre interface visual do Vitest |
-| `npm run test:coverage` | Executa testes com relatório de cobertura |
+| `npm run dev` | Servidor de desenvolvimento |
+| `npm run build` | Build de produção |
+| `npm run preview` | Preview do build |
+| `npm run lint` | Verificar código |
+| `npm test` | Executar testes |
+| `npm run test:integration` | Testes de integração |
+| `npm run test:coverage` | Cobertura de testes |
 
-### Checklist de Qualidade
+## 📚 Documentação Adicional
 
-Antes de fazer deploy ou commit, execute:
+- [Modelagem de Dados](./RESUMO_MODELAGEM.md)
+- [Autenticação Implementada](./AUTENTICACAO_IMPLEMENTADA.md)
+- [Correções Aplicadas](./CORREÇÕES_APLICADAS.md)
+- [Testes de Integração](./TESTES_INTEGRACAO.md)
+- [Comandos de Teste](./tests/COMANDOS_TESTES.md)
 
-```bash
-# 1. Verificar lint
-npm run lint
+## 🗺️ Próximas Etapas
 
-# 2. Executar testes com cobertura
-npm run test:coverage
-
-# 3. Fazer build
-npm run build
-
-# 4. Testar build localmente
-npm run preview
-```
-
-### Meta de Cobertura
-
-- **Linhas**: ≥70%
-- **Funções**: ≥70%
-- **Branches**: ≥70%
-- **Statements**: ≥70%
-
-## 🌐 Rotas Disponíveis
-
-| Rota | Descrição | Status |
-|------|-----------|--------|
-| `/` | Landing page do SaaS | ✅ Placeholder |
-| `/dashboard` | Painel administrativo (protegido) | ✅ Placeholder |
-| `/checkin` | Portal de check-in de eventos | ✅ Placeholder |
-
-## 🔧 Utilitários Disponíveis
-
-### CPF Utils (`src/lib/utils/cpf.ts`)
-```typescript
-import { isValidCPF, formatCPF } from "@/lib/utils/cpf";
-
-isValidCPF("12345678901");           // true/false
-formatCPF("12345678901");            // "123.456.789-01"
-```
-
-### Currency Utils (`src/lib/utils/currency.ts`)
-```typescript
-import { formatBRL, parseBRL } from "@/lib/utils/currency";
-
-formatBRL(1234.5);                   // "R$ 1.234,50"
-parseBRL("R$ 1.234,50");             // 1234.5
-```
-
-### Date Utils (`src/lib/utils/date.ts`)
-```typescript
-import { formatDate, formatDateOnly, formatTimeOnly } from "@/lib/utils/date";
-
-formatDate(new Date());              // "02/10/2025 14:30"
-formatDateOnly(new Date());          // "02/10/2025"
-formatTimeOnly(new Date());          // "14:30"
-```
-
-## 🔌 Edge Functions
-
-### Health Check
-Endpoint de verificação de saúde da API.
-
-**Endpoint**: `POST /functions/v1/health`
-
-**Resposta**:
-```json
-{
-  "status": "ok"
-}
-```
-
-**Uso no código**:
-```typescript
-import { healthCheck } from "@/services/api";
-
-const result = await healthCheck();
-console.log(result); // { status: "ok" }
-```
-
-## 🔐 Lovable Cloud (Backend)
-
-Este projeto usa **Lovable Cloud**, que fornece:
-- ✅ PostgreSQL database
-- ✅ Autenticação integrada
-- ✅ Edge Functions (serverless)
-- ✅ File storage
-- ✅ Row Level Security (RLS)
-
-Para acessar o backend, abra o projeto no Lovable e clique em "Manage Cloud".
-
-## 📦 Próximos Passos
-
-Esta é a **Etapa 0** (scaffold). As próximas etapas incluirão:
-
-1. **Schema do banco de dados** (tenants, events, sectors, tickets, etc.)
-2. **Autenticação e autorização**
-3. **CRUD de eventos e setores**
-4. **Sistema de cupons**
-5. **Checkout e pagamentos**
-6. **Sistema de check-in**
-7. **Relatórios e dashboards**
-
-## 🤝 Contribuindo
-
-1. Faça fork do projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
-
-## 📄 Licença
-
-Este projeto está sob a licença MIT.
+- [ ] Implementar fluxo de compra de ingressos
+- [ ] Adicionar validação de QR Codes (JWT assinado)
+- [ ] Implementar transferência de ingressos
+- [ ] Dashboard de métricas e relatórios
+- [ ] Integração com gateway de pagamento
 
 ## 📧 Suporte
 
-Para suporte, abra uma issue no repositório ou entre em contato com a equipe de desenvolvimento.
+Para dúvidas sobre autenticação e RBAC, consulte `AUTENTICACAO_IMPLEMENTADA.md`.
+Para comandos de teste, consulte `tests/COMANDOS_TESTES.md`.
 
 ---
 
