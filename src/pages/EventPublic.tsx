@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { eventService, Event } from '@/services/events';
 import { sectorService, Sector } from '@/services/sectors';
 import { ticketTypeService, TicketType } from '@/services/ticketTypes';
@@ -20,6 +20,7 @@ interface LotWithType extends Lot {
 
 const EventPublic = () => {
   const { eventId } = useParams();
+  const navigate = useNavigate();
   const { toast } = useToast();
 
   const [event, setEvent] = useState<Event | null>(null);
@@ -107,11 +108,18 @@ const EventPublic = () => {
       return;
     }
 
-    // TODO: Navegar para página de checkout
-    toast({
-      title: 'Checkout em desenvolvimento',
-      description: `${totalItems} ${totalItems === 1 ? 'ingresso selecionado' : 'ingressos selecionados'}. Valor: ${formatBRL(totalValue)}`,
-    });
+    // Preparar dados do carrinho
+    const cartItems = Object.entries(cart)
+      .filter(([, qty]) => qty > 0)
+      .map(([lotId, quantity]) => ({
+        ticketTypeId: lots.find((l) => l.id === lotId)!.ticket_type_id,
+        lotId,
+        quantity,
+      }));
+
+    // Navegar para checkout com dados
+    const cartData = encodeURIComponent(JSON.stringify(cartItems));
+    navigate(`/checkout?eventId=${event.id}&cart=${cartData}`);
   };
 
   const isLotAvailable = (lot: Lot) => {
