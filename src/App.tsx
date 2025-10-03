@@ -14,6 +14,8 @@ import Checkin from "./pages/Checkin";
 import Orders from "./pages/Orders";
 import OrderSuccess from "./pages/OrderSuccess";
 import NotFound from "./pages/NotFound";
+import MyOrders from "./pages/Me/Orders";
+import MyTickets from "./pages/Me/Tickets";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +34,8 @@ const App = () => (
             <Route path="/orders" element={<Orders />} />
             <Route path="/orders/:orderId" element={<Orders />} />
             <Route path="/success" element={<OrderSuccess />} />
+            <Route path="/me/orders" element={<MyOrders />} />
+            <Route path="/me/tickets" element={<MyTickets />} />
             <Route
               path="/dashboard/*"
               element={

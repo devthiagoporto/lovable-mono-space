@@ -156,6 +156,13 @@ export type Database = {
             referencedRelation: "tickets"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "checkins_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "v_my_tickets"
+            referencedColumns: ["ticket_id"]
+          },
         ]
       }
       coupon_usage: {
@@ -583,6 +590,13 @@ export type Database = {
             referencedRelation: "tickets"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "revocations_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "v_my_tickets"
+            referencedColumns: ["ticket_id"]
+          },
         ]
       }
       sectors: {
@@ -846,6 +860,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "transfers_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "v_my_tickets"
+            referencedColumns: ["ticket_id"]
+          },
+          {
             foreignKeyName: "transfers_to_user_id_fkey"
             columns: ["to_user_id"]
             isOneToOne: false
@@ -889,7 +910,50 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_my_tickets: {
+        Row: {
+          event_title: string | null
+          fim: string | null
+          inicio: string | null
+          order_id: string | null
+          sector_id: string | null
+          tenant_id: string | null
+          ticket_id: string | null
+          ticket_status: Database["public"]["Enums"]["ticket_status"] | null
+          ticket_type_id: string | null
+          ticket_type_name: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tickets_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_sector_id_fkey"
+            columns: ["sector_id"]
+            isOneToOne: false
+            referencedRelation: "sectors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_ticket_type_id_fkey"
+            columns: ["ticket_type_id"]
+            isOneToOne: false
+            referencedRelation: "ticket_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       has_role: {
