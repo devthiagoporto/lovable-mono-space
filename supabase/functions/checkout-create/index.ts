@@ -1,24 +1,9 @@
-import { createClient } from 'jsr:@supabase/supabase-js@2';
-import Stripe from 'https://esm.sh/stripe@17.5.0';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-tenant-id',
 };
-
-interface CheckoutItem {
-  ticketTypeId: string;
-  lotId: string;
-  quantity: number;
-}
-
-interface CheckoutPayload {
-  eventId: string;
-  items: CheckoutItem[];
-  successUrl: string;
-  cancelUrl: string;
-  buyerEmail?: string;
-}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -31,74 +16,64 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     const tenantId = req.headers.get('x-tenant-id');
 
-    if (!authHeader) {
-      throw new Error('Missing authorization header');
-    }
-
-    if (!tenantId) {
-      throw new Error('Missing x-tenant-id header');
+    if (!authHeader || !tenantId) {
+      throw new Error('Missing required headers');
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    // Validate user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
-      throw new Error('Invalid token or user not found');
+      throw new Error('Invalid token');
     }
 
-    // Parse payload
-    const payload: CheckoutPayload = await req.json();
+    const payload = await req.json();
     const { eventId, items, successUrl, cancelUrl, buyerEmail } = payload;
 
     if (!eventId || !items || items.length === 0) {
-      throw new Error('Invalid payload: missing eventId or items');
+      throw new Error('Invalid payload');
     }
 
     // Check active payment gateway
-    const { data: gateways, error: gwError } = await supabase
+    const { data: gateway, error: gwError } = await supabase
       .from('payment_gateways')
       .select('*')
       .eq('tenant_id', tenantId)
       .eq('active', true)
       .single();
 
-    if (gwError || !gateways) {
-      throw new Error('No active payment gateway found for this tenant');
+    if (gwError || !gateway) {
+      throw new Error('No active payment gateway');
     }
 
-    // Only Stripe supported in this phase
-    if (gateways.provider !== 'stripe') {
+    if (gateway.provider !== 'stripe') {
       return new Response(
         JSON.stringify({ ok: false, message: 'Provider not implemented yet' }),
         { status: 501, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Load lots and ticket types
-    const lotIds = items.map((i) => i.lotId);
+    // Load lots
+    const lotIds = items.map((i: any) => i.lotId);
     const { data: lots, error: lotsError } = await supabase
       .from('lots')
       .select('*, ticket_types!inner(*)')
       .in('id', lotIds);
 
     if (lotsError || !lots || lots.length === 0) {
-      throw new Error('Failed to load lots or ticket types');
+      throw new Error('Failed to load lots');
     }
 
-    // Calculate total and validate stock
+    // Calculate total
     let totalCents = 0;
     const lineItems: any[] = [];
 
     for (const item of items) {
-      const lot = lots.find((l) => l.id === item.lotId);
-      if (!lot) {
-        throw new Error(`Lot ${item.lotId} not found`);
-      }
+      const lot = lots.find((l: any) => l.id === item.lotId);
+      if (!lot) throw new Error(`Lot ${item.lotId} not found`);
 
-      // Check stock
       const available = lot.qtd_total - lot.qtd_vendida;
       if (available < item.quantity) {
         throw new Error(`Insufficient stock for lot ${lot.nome}`);
@@ -110,9 +85,7 @@ Deno.serve(async (req) => {
       lineItems.push({
         price_data: {
           currency: 'brl',
-          product_data: {
-            name: `${lot.ticket_types.nome} - ${lot.nome}`,
-          },
+          product_data: { name: `${lot.ticket_types.nome} - ${lot.nome}` },
           unit_amount: priceInCents,
         },
         quantity: item.quantity,
@@ -134,15 +107,12 @@ Deno.serve(async (req) => {
       .single();
 
     if (orderError || !order) {
-      console.error('Order creation error:', orderError);
       throw new Error('Failed to create order');
     }
 
-    console.log('Order created:', order.id);
-
     // Create order_items
-    const orderItems = items.map((item) => {
-      const lot = lots.find((l) => l.id === item.lotId)!;
+    const orderItems = items.map((item: any) => {
+      const lot = lots.find((l: any) => l.id === item.lotId)!;
       return {
         order_id: order.id,
         tenant_id: tenantId,
@@ -154,71 +124,55 @@ Deno.serve(async (req) => {
       };
     });
 
-    const { error: itemsError } = await supabase
-      .from('order_items')
-      .insert(orderItems);
-
+    const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
     if (itemsError) {
-      console.error('Order items creation error:', itemsError);
-      // Rollback order
       await supabase.from('orders').delete().eq('id', order.id);
       throw new Error('Failed to create order items');
     }
 
-    console.log('Order items created:', orderItems.length);
+    // Create Stripe session using fetch
+    const stripeResponse = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${gateway.config.secretKey}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        'mode': 'payment',
+        'success_url': successUrl.replace('{ORDER_ID}', order.id),
+        'cancel_url': cancelUrl,
+        'client_reference_id': order.id,
+        'customer_email': buyerEmail || user.email || '',
+        'metadata[order_id]': order.id,
+        'metadata[tenant_id]': tenantId,
+        ...lineItems.reduce((acc: any, item, idx) => {
+          acc[`line_items[${idx}][price_data][currency]`] = item.price_data.currency;
+          acc[`line_items[${idx}][price_data][product_data][name]`] = item.price_data.product_data.name;
+          acc[`line_items[${idx}][price_data][unit_amount]`] = item.price_data.unit_amount.toString();
+          acc[`line_items[${idx}][quantity]`] = item.quantity.toString();
+          return acc;
+        }, {}),
+      }),
+    });
 
-    // Initialize Stripe
-    const stripeSecretKey = gateways.config?.secretKey;
-    if (!stripeSecretKey) {
-      throw new Error('Stripe secret key not configured');
+    if (!stripeResponse.ok) {
+      const error = await stripeResponse.text();
+      throw new Error(`Stripe error: ${error}`);
     }
 
-    const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: '2024-12-18.acacia',
-    });
+    const session = await stripeResponse.json();
 
-    // Create Stripe Checkout Session
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: lineItems,
-      mode: 'payment',
-      success_url: successUrl.replace('{ORDER_ID}', order.id),
-      cancel_url: cancelUrl,
-      client_reference_id: order.id,
-      customer_email: buyerEmail || user.email,
-      metadata: {
-        order_id: order.id,
-        tenant_id: tenantId,
-      },
-    });
-
-    // Update order with payment_intent_id
-    await supabase
-      .from('orders')
-      .update({ payment_intent_id: session.id })
-      .eq('id', order.id);
-
-    console.log('Stripe session created:', session.id);
+    await supabase.from('orders').update({ payment_intent_id: session.id }).eq('id', order.id);
 
     return new Response(
-      JSON.stringify({
-        ok: true,
-        checkoutUrl: session.url,
-        orderId: order.id,
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
+      JSON.stringify({ ok: true, checkoutUrl: session.url, orderId: order.id }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
-  } catch (error) {
-    console.error('Error in checkout-create:', error);
+  } catch (error: any) {
+    console.error('Error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400,
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
     );
   }
 });
