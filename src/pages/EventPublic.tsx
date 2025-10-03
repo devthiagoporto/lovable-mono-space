@@ -4,18 +4,14 @@ import { eventService, Event } from '@/services/events';
 import { sectorService, Sector } from '@/services/sectors';
 import { ticketTypeService, TicketType } from '@/services/ticketTypes';
 import { lotService, Lot } from '@/services/lots';
-import { cartService, CartItem } from '@/services/cart';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/utils/date';
 import { formatBRL } from '@/lib/utils/currency';
-import { formatCPF } from '@/lib/utils/cpf';
-import { Calendar, MapPin, Share2, Minus, Plus, CreditCard, ArrowLeft, Ticket } from 'lucide-react';
+import { Calendar, MapPin, Share2, Minus, Plus, CreditCard, ArrowLeft } from 'lucide-react';
 
 interface LotWithType extends Lot {
   ticket_type_name: string;
@@ -33,8 +29,6 @@ const EventPublic = () => {
   const [loading, setLoading] = useState(true);
   const [validating, setValidating] = useState(false);
 
-  const [cpf, setCpf] = useState('');
-  const [couponCode, setCouponCode] = useState('');
   const [cart, setCart] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -103,93 +97,21 @@ const EventPublic = () => {
     });
   };
 
-  const handleValidateCart = async () => {
-    if (!event) return;
-
-    const items: CartItem[] = Object.entries(cart)
-      .filter(([, qty]) => qty > 0)
-      .map(([lotId, quantity]) => {
-        const lot = lots.find((l) => l.id === lotId);
-        return {
-          ticketTypeId: lot!.ticket_type_id,
-          lotId,
-          quantity,
-        };
-      });
-
-    if (items.length === 0) {
+  const handleContinueToCheckout = () => {
+    if (totalItems === 0) {
       toast({
         title: 'Carrinho vazio',
-        description: 'Selecione ao menos um ingresso',
+        description: 'Selecione ao menos um ingresso para continuar',
         variant: 'destructive',
       });
       return;
     }
 
-    if (!cpf || cpf.replace(/\D/g, '').length !== 11) {
-      toast({
-        title: 'CPF inválido',
-        description: 'Por favor, informe um CPF válido',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    try {
-      setValidating(true);
-      const result = await cartService.validateCart({
-        tenantId: event.tenant_id,
-        eventId: event.id,
-        buyerCpf: cpf.replace(/\D/g, ''),
-        items,
-        couponCodes: couponCode ? [couponCode.toUpperCase()] : undefined,
-      });
-
-      if (result.ok) {
-        const summary = result.summary!;
-        let description = `${summary.totalItems} ingressos`;
-        
-        if (summary.pricing) {
-          description += `\nSubtotal: ${formatBRL(summary.pricing.subtotal)}`;
-          if (summary.pricing.discounts.length > 0) {
-            const totalDiscount = summary.pricing.discounts.reduce((sum, d) => sum + d.amount, 0);
-            description += `\nDesconto: ${formatBRL(totalDiscount)}`;
-          }
-          description += `\nTotal: ${formatBRL(summary.pricing.total)}`;
-        }
-        
-        toast({
-          title: 'Carrinho validado!',
-          description,
-        });
-        
-        if (summary.warnings.length > 0) {
-          summary.warnings.forEach((warning) => {
-            toast({
-              title: 'Atenção',
-              description: warning,
-            });
-          });
-        }
-      } else {
-        result.errors!.forEach((error) => {
-          toast({
-            title: 'Erro de validação',
-            description: error.message,
-            variant: 'destructive',
-          });
-        });
-      }
-    } catch (error) {
-      console.error('Validation error:', error);
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível validar o carrinho',
-        variant: 'destructive',
-      });
-    } finally {
-      setValidating(false);
-    }
+    // TODO: Navegar para página de checkout
+    toast({
+      title: 'Checkout em desenvolvimento',
+      description: `${totalItems} ${totalItems === 1 ? 'ingresso selecionado' : 'ingressos selecionados'}. Valor: ${formatBRL(totalValue)}`,
+    });
   };
 
   const isLotAvailable = (lot: Lot) => {
@@ -424,50 +346,37 @@ const EventPublic = () => {
                 <CardTitle className="text-lg">Resumo do Pedido</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* CPF */}
-                <div>
-                  <Label htmlFor="cpf" className="text-sm font-semibold">
-                    CPF do comprador *
-                  </Label>
-                  <Input
-                    id="cpf"
-                    value={cpf}
-                    onChange={(e) => setCpf(formatCPF(e.target.value))}
-                    placeholder="000.000.000-00"
-                    maxLength={14}
-                    className="mt-1.5"
-                  />
-                </div>
-
-                {/* Cupom */}
-                <div>
-                  <Label htmlFor="coupon" className="text-sm font-semibold">
-                    Cupom de desconto
-                  </Label>
-                  <Input
-                    id="coupon"
-                    value={couponCode}
-                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                    placeholder="Digite o código"
-                    className="mt-1.5 uppercase"
-                  />
-                </div>
-
-                <Separator />
+                {/* Lista de ingressos no carrinho */}
+                {totalItems > 0 && (
+                  <div className="space-y-2 border-b pb-4">
+                    {Object.entries(cart)
+                      .filter(([, qty]) => qty > 0)
+                      .map(([lotId, quantity]) => {
+                        const lot = lots.find((l) => l.id === lotId);
+                        if (!lot) return null;
+                        return (
+                          <div key={lotId} className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              {quantity}x {lot.nome}
+                            </span>
+                            <span className="font-medium">
+                              {formatBRL(lot.preco * quantity)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
 
                 {/* Totais */}
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Ingressos</span>
+                    <span className="text-muted-foreground">Total de ingressos</span>
                     <span className="font-semibold">{totalItems}</span>
                   </div>
                   
                   {totalItems > 0 && (
                     <>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Subtotal</span>
-                        <span className="font-mono">{formatBRL(totalValue)}</span>
-                      </div>
                       <Separator />
                       <div className="flex justify-between text-lg">
                         <span className="font-bold">Total</span>
@@ -475,28 +384,32 @@ const EventPublic = () => {
                           {formatBRL(totalValue)}
                         </span>
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        * Taxas podem ser aplicadas no checkout
+                      </p>
                     </>
                   )}
                 </div>
 
                 <Button
                   className="w-full h-12 text-base font-semibold bg-gradient-to-r from-primary to-accent hover:opacity-90"
-                  onClick={handleValidateCart}
-                  disabled={validating || totalItems === 0}
+                  onClick={handleContinueToCheckout}
+                  disabled={totalItems === 0}
                   size="lg"
                 >
-                  {validating ? 'Validando...' : 'Comprar Ingressos'}
+                  Continuar para Pagamento
                 </Button>
 
                 {totalItems === 0 && (
-                  <p className="text-center text-xs text-muted-foreground">
-                    Selecione os ingressos acima
+                  <p className="text-center text-sm text-muted-foreground">
+                    Selecione os ingressos acima para continuar
                   </p>
                 )}
 
-                <p className="text-center text-xs text-muted-foreground">
-                  Pagamento 100% seguro
-                </p>
+                <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground pt-2">
+                  <CreditCard className="h-3 w-3" />
+                  <span>Pagamento 100% seguro</span>
+                </div>
               </CardContent>
             </Card>
           </div>
