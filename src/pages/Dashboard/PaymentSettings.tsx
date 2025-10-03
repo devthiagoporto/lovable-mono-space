@@ -12,8 +12,8 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
 interface GatewayFormState {
-  active: boolean;
-  config: Record<string, string>;
+  isActive: boolean;
+  credentials: Record<string, string>;
 }
 
 type GatewayStates = Record<PaymentProvider, GatewayFormState>;
@@ -30,10 +30,10 @@ export default function PaymentSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<PaymentProvider | null>(null);
   const [gateways, setGateways] = useState<GatewayStates>({
-    stripe: { active: false, config: {} },
-    pagarme: { active: false, config: {} },
-    mercadopago: { active: false, config: {} },
-    pix_manual: { active: false, config: {} },
+    stripe: { isActive: false, credentials: {} },
+    pagarme: { isActive: false, credentials: {} },
+    mercadopago: { isActive: false, credentials: {} },
+    pix_manual: { isActive: false, credentials: {} },
   });
 
   const tenantId = memberships[0]?.tenantId;
@@ -54,8 +54,8 @@ export default function PaymentSettings() {
       const newStates: GatewayStates = { ...gateways };
       data.forEach((gw: PaymentGateway) => {
         newStates[gw.provider] = {
-          active: gw.active,
-          config: gw.config || {},
+          isActive: gw.is_active,
+          credentials: gw.credentials || {},
         };
       });
       setGateways(newStates);
@@ -72,9 +72,9 @@ export default function PaymentSettings() {
     const state = gateways[provider];
 
     // Validação básica se ativo
-    if (state.active) {
+    if (state.isActive) {
       const requiredFields = getRequiredFields(provider);
-      const missing = requiredFields.filter((f) => !state.config[f]);
+      const missing = requiredFields.filter((f) => !state.credentials[f]);
       if (missing.length > 0) {
         toast.error(`Campos obrigatórios faltando: ${missing.join(', ')}`);
         return;
@@ -83,10 +83,11 @@ export default function PaymentSettings() {
 
     try {
       setSaving(provider);
-      await paymentService.upsert(tenantId, {
+      await paymentService.upsert({
+        tenantId: tenantId,
         provider,
-        active: state.active,
-        config: state.config,
+        isActive: state.isActive,
+        credentials: state.credentials,
       });
       toast.success(`${PROVIDER_LABELS[provider]} salvo com sucesso!`);
       await loadGateways();
@@ -97,12 +98,12 @@ export default function PaymentSettings() {
     }
   };
 
-  const updateConfig = (provider: PaymentProvider, key: string, value: string) => {
+  const updateCredentials = (provider: PaymentProvider, key: string, value: string) => {
     setGateways((prev) => ({
       ...prev,
       [provider]: {
         ...prev[provider],
-        config: { ...prev[provider].config, [key]: value },
+        credentials: { ...prev[provider].credentials, [key]: value },
       },
     }));
   };
@@ -112,7 +113,7 @@ export default function PaymentSettings() {
       ...prev,
       [provider]: {
         ...prev[provider],
-        active: !prev[provider].active,
+        isActive: !prev[provider].isActive,
       },
     }));
   };
@@ -143,8 +144,8 @@ export default function PaymentSettings() {
             id="stripe-publishable"
             type="text"
             placeholder="pk_..."
-            value={state.config.publishableKey || ''}
-            onChange={(e) => updateConfig(provider, 'publishableKey', e.target.value)}
+            value={state.credentials.publishableKey || ''}
+            onChange={(e) => updateCredentials(provider, 'publishableKey', e.target.value)}
           />
         </div>
         <div className="space-y-2">
@@ -153,8 +154,8 @@ export default function PaymentSettings() {
             id="stripe-secret"
             type="password"
             placeholder="sk_..."
-            value={state.config.secretKey || ''}
-            onChange={(e) => updateConfig(provider, 'secretKey', e.target.value)}
+            value={state.credentials.secretKey || ''}
+            onChange={(e) => updateCredentials(provider, 'secretKey', e.target.value)}
           />
         </div>
         <div className="space-y-2">
@@ -163,8 +164,8 @@ export default function PaymentSettings() {
             id="stripe-webhook"
             type="password"
             placeholder="whsec_..."
-            value={state.config.webhookSecret || ''}
-            onChange={(e) => updateConfig(provider, 'webhookSecret', e.target.value)}
+            value={state.credentials.webhookSecret || ''}
+            onChange={(e) => updateCredentials(provider, 'webhookSecret', e.target.value)}
           />
         </div>
       </>
@@ -182,8 +183,8 @@ export default function PaymentSettings() {
             id="pagarme-api"
             type="password"
             placeholder="ak_..."
-            value={state.config.apiKey || ''}
-            onChange={(e) => updateConfig(provider, 'apiKey', e.target.value)}
+            value={state.credentials.apiKey || ''}
+            onChange={(e) => updateCredentials(provider, 'apiKey', e.target.value)}
           />
         </div>
         <div className="space-y-2">
@@ -192,8 +193,8 @@ export default function PaymentSettings() {
             id="pagarme-encryption"
             type="password"
             placeholder="ek_..."
-            value={state.config.encryptionKey || ''}
-            onChange={(e) => updateConfig(provider, 'encryptionKey', e.target.value)}
+            value={state.credentials.encryptionKey || ''}
+            onChange={(e) => updateCredentials(provider, 'encryptionKey', e.target.value)}
           />
         </div>
       </>
@@ -211,8 +212,8 @@ export default function PaymentSettings() {
             id="mp-public"
             type="text"
             placeholder="APP_USR-..."
-            value={state.config.publicKey || ''}
-            onChange={(e) => updateConfig(provider, 'publicKey', e.target.value)}
+            value={state.credentials.publicKey || ''}
+            onChange={(e) => updateCredentials(provider, 'publicKey', e.target.value)}
           />
         </div>
         <div className="space-y-2">
@@ -221,8 +222,8 @@ export default function PaymentSettings() {
             id="mp-access"
             type="password"
             placeholder="APP_USR-..."
-            value={state.config.accessToken || ''}
-            onChange={(e) => updateConfig(provider, 'accessToken', e.target.value)}
+            value={state.credentials.accessToken || ''}
+            onChange={(e) => updateCredentials(provider, 'accessToken', e.target.value)}
           />
         </div>
         <div className="space-y-2">
@@ -230,8 +231,8 @@ export default function PaymentSettings() {
           <Input
             id="mp-webhook"
             type="password"
-            value={state.config.webhookSecret || ''}
-            onChange={(e) => updateConfig(provider, 'webhookSecret', e.target.value)}
+            value={state.credentials.webhookSecret || ''}
+            onChange={(e) => updateCredentials(provider, 'webhookSecret', e.target.value)}
           />
         </div>
       </>
@@ -249,15 +250,15 @@ export default function PaymentSettings() {
             id="pix-chave"
             type="text"
             placeholder="12345678900 ou email@example.com"
-            value={state.config.chavePix || ''}
-            onChange={(e) => updateConfig(provider, 'chavePix', e.target.value)}
+            value={state.credentials.chavePix || ''}
+            onChange={(e) => updateCredentials(provider, 'chavePix', e.target.value)}
           />
         </div>
         <div className="space-y-2">
           <Label htmlFor="pix-tipo">Tipo de Chave *</Label>
           <Select
-            value={state.config.tipoChave || ''}
-            onValueChange={(value) => updateConfig(provider, 'tipoChave', value)}
+            value={state.credentials.tipoChave || ''}
+            onValueChange={(value) => updateCredentials(provider, 'tipoChave', value)}
           >
             <SelectTrigger id="pix-tipo">
               <SelectValue placeholder="Selecione o tipo" />
@@ -277,8 +278,8 @@ export default function PaymentSettings() {
             id="pix-instrucoes"
             placeholder="Instruções para o comprador..."
             rows={3}
-            value={state.config.instrucoes || ''}
-            onChange={(e) => updateConfig(provider, 'instrucoes', e.target.value)}
+            value={state.credentials.instrucoes || ''}
+            onChange={(e) => updateCredentials(provider, 'instrucoes', e.target.value)}
           />
         </div>
       </>
@@ -288,7 +289,7 @@ export default function PaymentSettings() {
   const renderProviderCard = (provider: PaymentProvider) => {
     const state = gateways[provider];
     const isSaving = saving === provider;
-    const isReady = state.active && getRequiredFields(provider).every((f) => state.config[f]);
+    const isReady = state.isActive && getRequiredFields(provider).every((f) => state.credentials[f]);
 
     return (
       <Card key={provider}>
@@ -311,7 +312,7 @@ export default function PaymentSettings() {
               <Label htmlFor={`active-${provider}`}>Ativo</Label>
               <Switch
                 id={`active-${provider}`}
-                checked={state.active}
+                checked={state.isActive}
                 onCheckedChange={() => toggleActive(provider)}
               />
             </div>

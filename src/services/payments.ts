@@ -6,16 +6,17 @@ export interface PaymentGateway {
   id: string;
   tenant_id: string;
   provider: PaymentProvider;
-  active: boolean;
-  config: Record<string, any>;
+  is_active: boolean;
+  credentials: Record<string, any>;
   created_at: string;
   updated_at: string;
 }
 
 export interface UpsertPaymentGatewayRequest {
+  tenantId: string;
   provider: PaymentProvider;
-  active: boolean;
-  config: Record<string, any>;
+  isActive: boolean;
+  credentials: Record<string, any>;
 }
 
 export const paymentService = {
@@ -28,7 +29,7 @@ export const paymentService = {
       throw new Error('Not authenticated');
     }
 
-    const { data, error } = await supabase.functions.invoke('payments-list', {
+    const { data, error } = await supabase.functions.invoke('payments-get', {
       headers: {
         'x-tenant-id': tenantId,
       },
@@ -38,10 +39,7 @@ export const paymentService = {
     return data.gateways || [];
   },
 
-  async upsert(
-    tenantId: string,
-    payload: UpsertPaymentGatewayRequest
-  ): Promise<PaymentGateway> {
+  async upsert(payload: UpsertPaymentGatewayRequest): Promise<PaymentGateway> {
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -51,9 +49,6 @@ export const paymentService = {
     }
 
     const { data, error } = await supabase.functions.invoke('payments-upsert', {
-      headers: {
-        'x-tenant-id': tenantId,
-      },
       body: payload,
     });
 

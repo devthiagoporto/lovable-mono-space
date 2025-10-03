@@ -510,28 +510,28 @@ export type Database = {
       }
       payment_gateways: {
         Row: {
-          active: boolean
-          config: Json
           created_at: string
+          credentials: Json
           id: string
+          is_active: boolean
           provider: Database["public"]["Enums"]["payment_provider"]
           tenant_id: string
           updated_at: string
         }
         Insert: {
-          active?: boolean
-          config?: Json
           created_at?: string
+          credentials?: Json
           id?: string
+          is_active?: boolean
           provider: Database["public"]["Enums"]["payment_provider"]
           tenant_id: string
           updated_at?: string
         }
         Update: {
-          active?: boolean
-          config?: Json
           created_at?: string
+          credentials?: Json
           id?: string
+          is_active?: boolean
           provider?: Database["public"]["Enums"]["payment_provider"]
           tenant_id?: string
           updated_at?: string

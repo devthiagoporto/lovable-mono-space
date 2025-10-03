@@ -1,18 +1,18 @@
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-tenant-id',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 interface UpsertPayload {
+  tenantId: string;
   provider: 'stripe' | 'pagarme' | 'mercadopago' | 'pix_manual';
-  active: boolean;
-  config: Record<string, any>;
+  isActive: boolean;
+  credentials: Record<string, any>;
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -21,98 +21,62 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const authHeader = req.headers.get('Authorization');
-    const tenantId = req.headers.get('x-tenant-id');
 
     if (!authHeader) {
       throw new Error('Missing authorization header');
     }
 
-    if (!tenantId) {
-      throw new Error('Missing x-tenant-id header');
-    }
-
-    // Create client with user's token for RLS validation
-    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey, {
-      global: {
-        headers: { Authorization: authHeader },
-      },
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      global: { headers: { Authorization: authHeader } },
     });
 
-    // Get user from token
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseClient.auth.getUser();
-
+    // Validate user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
       throw new Error('Invalid token or user not found');
     }
 
-    // Check if user is admin of the tenant
-    const { data: isAdmin, error: roleError } = await supabaseClient.rpc(
+    // Parse payload
+    const payload: UpsertPayload = await req.json();
+    const { tenantId, provider, isActive, credentials } = payload;
+
+    if (!tenantId || !provider) {
+      throw new Error('Missing required fields: tenantId, provider');
+    }
+
+    // Check if user is admin of tenant
+    const { data: isAdmin, error: adminError } = await supabase.rpc(
       'is_tenant_admin',
       { p_tenant: tenantId }
     );
 
-    if (roleError) {
-      console.error('Role check error:', roleError);
-      throw new Error('Failed to verify admin role');
-    }
-
-    if (!isAdmin) {
+    if (adminError || !isAdmin) {
       throw new Error('User is not admin of this tenant');
     }
 
-    // Parse request body
-    const payload: UpsertPayload = await req.json();
+    // If activating this provider, deactivate all others for this tenant
+    if (isActive) {
+      const { error: deactivateError } = await supabase
+        .from('payment_gateways')
+        .update({ is_active: false })
+        .eq('tenant_id', tenantId)
+        .neq('provider', provider);
 
-    if (!payload.provider) {
-      throw new Error('Missing provider field');
-    }
-
-    if (typeof payload.active !== 'boolean') {
-      throw new Error('Missing or invalid active field');
-    }
-
-    if (!payload.config || typeof payload.config !== 'object') {
-      throw new Error('Missing or invalid config field');
-    }
-
-    // Validate required fields per provider if active
-    if (payload.active) {
-      switch (payload.provider) {
-        case 'stripe':
-          if (!payload.config.publishableKey || !payload.config.secretKey) {
-            throw new Error('Stripe requires publishableKey and secretKey');
-          }
-          break;
-        case 'pagarme':
-          if (!payload.config.apiKey || !payload.config.encryptionKey) {
-            throw new Error('Pagar.me requires apiKey and encryptionKey');
-          }
-          break;
-        case 'mercadopago':
-          if (!payload.config.publicKey || !payload.config.accessToken) {
-            throw new Error('Mercado Pago requires publicKey and accessToken');
-          }
-          break;
-        case 'pix_manual':
-          if (!payload.config.chavePix || !payload.config.tipoChave) {
-            throw new Error('PIX Manual requires chavePix and tipoChave');
-          }
-          break;
+      if (deactivateError) {
+        console.error('Error deactivating other providers:', deactivateError);
+        throw new Error('Failed to deactivate other providers');
       }
     }
 
-    // Upsert payment gateway
-    const { data: gateway, error: upsertError } = await supabaseClient
+    // Upsert the gateway
+    const { data: gateway, error: upsertError } = await supabase
       .from('payment_gateways')
       .upsert(
         {
           tenant_id: tenantId,
-          provider: payload.provider,
-          active: payload.active,
-          config: payload.config,
+          provider,
+          is_active: isActive,
+          credentials,
           updated_at: new Date().toISOString(),
         },
         {
@@ -123,21 +87,27 @@ Deno.serve(async (req) => {
       .single();
 
     if (upsertError) {
-      console.error('Upsert error:', upsertError);
+      console.error('Error upserting gateway:', upsertError);
       throw new Error('Failed to save payment gateway');
     }
 
-    console.log('Payment gateway saved:', { provider: payload.provider, active: payload.active });
+    console.log('Payment gateway saved:', { provider, isActive, tenantId });
 
-    return new Response(JSON.stringify({ gateway }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    });
-  } catch (error) {
-    console.error('Error:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400,
-    });
+    return new Response(
+      JSON.stringify({ gateway }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      }
+    );
+  } catch (error: any) {
+    console.error('Error in payments-upsert:', error);
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+      }
+    );
   }
 });
