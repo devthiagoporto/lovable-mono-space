@@ -288,13 +288,21 @@ export default function PaymentSettings() {
   const renderProviderCard = (provider: PaymentProvider) => {
     const state = gateways[provider];
     const isSaving = saving === provider;
+    const isReady = state.active && getRequiredFields(provider).every((f) => state.config[f]);
 
     return (
       <Card key={provider}>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>{PROVIDER_LABELS[provider]}</CardTitle>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <CardTitle>{PROVIDER_LABELS[provider]}</CardTitle>
+                {isReady && (
+                  <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700">
+                    Pronto ✅
+                  </span>
+                )}
+              </div>
               <CardDescription>
                 Configurar credenciais de {PROVIDER_LABELS[provider]}
               </CardDescription>

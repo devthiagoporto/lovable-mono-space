@@ -250,72 +250,40 @@ const Checkout = () => {
     setProcessing(true);
 
     try {
-      // Validar carrinho
-      const result = await cartService.validateCart({
-        tenantId: event.tenant_id,
+      // Import checkout service
+      const { checkoutService } = await import('@/services/checkout');
+
+      // Prepare checkout items
+      const items = cartItems.map((item) => ({
+        ticketTypeId: item.ticketTypeId,
+        lotId: item.lotId,
+        quantity: item.quantity,
+      }));
+
+      // Create checkout session
+      const result = await checkoutService.create(event.tenant_id, {
         eventId: event.id,
-        buyerCpf: buyerCpf.replace(/\D/g, ''),
-        items: cartItems,
-        couponCodes: couponCode ? [couponCode.toUpperCase()] : undefined,
+        items,
+        successUrl: `${window.location.origin}/orders/{ORDER_ID}`,
+        cancelUrl: `${window.location.origin}/checkout?eventId=${event.id}&cart=${encodeURIComponent(JSON.stringify(cartItems))}`,
+        buyerEmail,
       });
 
       if (!result.ok) {
-        result.errors!.forEach((error) => {
-          toast({
-            title: 'Erro de validação',
-            description: error.message,
-            variant: 'destructive',
-          });
-        });
-        setProcessing(false);
-        return;
+        throw new Error(result.message || 'Failed to create checkout');
       }
 
-      // Criar order
-      const order = await orderService.create({
-        tenantId: event.tenant_id,
-        eventId: event.id,
-        buyerCpf: buyerCpf.replace(/\D/g, ''),
-        buyerName,
-        buyerEmail,
-        items: cartItems.map(item => ({
-          ticketTypeId: item.ticketTypeId,
-          lotId: item.lotId,
-          quantity: item.quantity,
-          price: item.price,
-        })),
-        couponCodes: couponCode ? [couponCode.toUpperCase()] : undefined,
-      });
-
-      // Emitir tickets
-      for (const item of cartItems) {
-        for (let i = 0; i < item.quantity; i++) {
-          await ticketService.create({
-            tenantId: event.tenant_id,
-            orderId: order.id,
-            ticketTypeId: item.ticketTypeId,
-            sectorId: (await supabase.from('ticket_types').select('sector_id').eq('id', item.ticketTypeId).single()).data?.sector_id || '',
-            nomeTitular: buyerName,
-            cpfTitular: buyerCpf.replace(/\D/g, ''),
-          });
-        }
+      // Redirect to payment provider (Stripe)
+      if (result.checkoutUrl) {
+        window.location.href = result.checkoutUrl;
+      } else {
+        throw new Error('No checkout URL returned');
       }
-
-      // Atualizar status do pedido
-      await orderService.updateStatus(order.id, 'pago');
-
+    } catch (error: any) {
+      console.error('Checkout error:', error);
       toast({
-        title: 'Compra realizada!',
-        description: 'Seus ingressos foram emitidos com sucesso',
-      });
-
-      // Redirecionar para página de pedidos
-      navigate(`/orders/${order.id}`);
-    } catch (error) {
-      console.error('Purchase error:', error);
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível finalizar a compra',
+        title: 'Erro ao processar pagamento',
+        description: error.message,
         variant: 'destructive',
       });
       setProcessing(false);
