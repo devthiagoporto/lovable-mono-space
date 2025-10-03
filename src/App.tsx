@@ -10,6 +10,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import EventPublic from "./pages/EventPublic";
 import Checkout from "./pages/Checkout";
+import Orders from "./pages/Orders";
 import Checkin from "./pages/Checkin";
 import NotFound from "./pages/NotFound";
 
@@ -27,6 +28,8 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/e/:eventId" element={<EventPublic />} />
             <Route path="/checkout" element={<Checkout />} />
+            <Route path="/orders" element={<Orders />} />
+            <Route path="/orders/:orderId" element={<Orders />} />
             <Route
               path="/dashboard/*"
               element={

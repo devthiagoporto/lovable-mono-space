@@ -5,6 +5,9 @@ import { eventService, Event } from '@/services/events';
 import { lotService, Lot } from '@/services/lots';
 import { ticketTypeService } from '@/services/ticketTypes';
 import { cartService, CartItem } from '@/services/cart';
+import { orderService } from '@/services/orders';
+import { ticketService } from '@/services/tickets';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -268,13 +271,46 @@ const Checkout = () => {
         return;
       }
 
-      // TODO: Integrar com gateway de pagamento
-      toast({
-        title: 'Compra validada!',
-        description: 'Em breve você será redirecionado para o pagamento',
+      // Criar order
+      const order = await orderService.create({
+        tenantId: event.tenant_id,
+        eventId: event.id,
+        buyerCpf: buyerCpf.replace(/\D/g, ''),
+        buyerName,
+        buyerEmail,
+        items: cartItems.map(item => ({
+          ticketTypeId: item.ticketTypeId,
+          lotId: item.lotId,
+          quantity: item.quantity,
+          price: item.price,
+        })),
+        couponCodes: couponCode ? [couponCode.toUpperCase()] : undefined,
       });
 
-      setProcessing(false);
+      // Emitir tickets
+      for (const item of cartItems) {
+        for (let i = 0; i < item.quantity; i++) {
+          await ticketService.create({
+            tenantId: event.tenant_id,
+            orderId: order.id,
+            ticketTypeId: item.ticketTypeId,
+            sectorId: (await supabase.from('ticket_types').select('sector_id').eq('id', item.ticketTypeId).single()).data?.sector_id || '',
+            nomeTitular: buyerName,
+            cpfTitular: buyerCpf.replace(/\D/g, ''),
+          });
+        }
+      }
+
+      // Atualizar status do pedido
+      await orderService.updateStatus(order.id, 'pago');
+
+      toast({
+        title: 'Compra realizada!',
+        description: 'Seus ingressos foram emitidos com sucesso',
+      });
+
+      // Redirecionar para página de pedidos
+      navigate(`/orders/${order.id}`);
     } catch (error) {
       console.error('Purchase error:', error);
       toast({
