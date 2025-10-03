@@ -115,44 +115,22 @@ Deno.serve(async (req) => {
         for (const item of orderItems) {
           console.log(`Processing item: lot ${item.lot_id}, quantity ${item.quantity}`);
 
-          // Update lot stock atomically
-          const { data: updatedLot, error: stockError } = await supabase
-            .rpc('increment_lot_sold', {
+          // Update lot stock atomically using RPC
+          try {
+            const { error: stockError } = await supabase.rpc('increment_lot_sold', {
               p_lot_id: item.lot_id,
               p_quantity: item.quantity,
             });
 
-          // If RPC doesn't exist, use direct update with check
-          if (stockError?.code === '42883') {
-            // Function doesn't exist, use direct update
-            const { data: lot, error: lotError } = await supabase
-              .from('lots')
-              .select('qtd_vendida, qtd_total')
-              .eq('id', item.lot_id)
-              .single();
-
-            if (lotError || !lot) {
-              throw new Error(`Lot ${item.lot_id} not found`);
+            if (stockError) {
+              console.error('Stock update error:', stockError);
+              throw new Error(`Failed to update stock: ${stockError.message}`);
             }
 
-            const newSold = lot.qtd_vendida + item.quantity;
-            if (newSold > lot.qtd_total) {
-              throw new Error(`Insufficient stock for lot ${item.lot_id}`);
-            }
-
-            const { error: updateError } = await supabase
-              .from('lots')
-              .update({ qtd_vendida: newSold })
-              .eq('id', item.lot_id);
-
-            if (updateError) {
-              throw new Error(`Failed to update stock for lot ${item.lot_id}`);
-            }
-
-            console.log(`Stock updated for lot ${item.lot_id}: ${lot.qtd_vendida} -> ${newSold}`);
-          } else if (stockError) {
-            console.error('Stock update error:', stockError);
-            throw new Error(`Failed to update stock: ${stockError.message}`);
+            console.log(`Stock updated for lot ${item.lot_id}`);
+          } catch (error) {
+            console.error('Error updating stock:', error);
+            throw error;
           }
 
           // Get sector_id from ticket_type
