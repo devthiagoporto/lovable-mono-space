@@ -54,6 +54,7 @@ const Checkout = () => {
   const [cartItems, setCartItems] = useState<CartItemWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
 
   // Dados do comprador
   const [buyerName, setBuyerName] = useState('');
@@ -215,17 +216,9 @@ const Checkout = () => {
   };
 
   const handleFinalizePurchase = async () => {
-    if (!user) {
-      toast({
-        title: 'Faça login',
-        description: 'Você precisa estar logado para finalizar a compra',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     if (!event) return;
 
+    // Validar dados primeiro
     const validation = checkoutSchema.safeParse({
       cpf: buyerCpf,
       name: buyerName,
@@ -237,6 +230,16 @@ const Checkout = () => {
         title: 'Dados incompletos',
         description: validation.error.errors[0].message,
         variant: 'destructive',
+      });
+      return;
+    }
+
+    // Se não estiver logado, mostrar opção de login/cadastro
+    if (!user) {
+      setShowAuth(true);
+      toast({
+        title: 'Quase lá!',
+        description: 'Faça login ou crie uma conta para finalizar sua compra',
       });
       return;
     }
@@ -306,117 +309,12 @@ const Checkout = () => {
         <div className="grid gap-8 lg:grid-cols-[1fr,400px]">
           {/* Formulário principal */}
           <div className="space-y-6">
-            {/* Autenticação */}
-            {!user && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Login ou Cadastro</CardTitle>
-                  <CardDescription>
-                    Faça login ou crie uma conta para continuar
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Tabs defaultValue="login">
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="login">Entrar</TabsTrigger>
-                      <TabsTrigger value="signup">Cadastrar</TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="login">
-                      <form onSubmit={handleLogin} className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="login-email">E-mail</Label>
-                          <Input
-                            id="login-email"
-                            type="email"
-                            value={loginEmail}
-                            onChange={(e) => setLoginEmail(e.target.value)}
-                            required
-                            disabled={processing}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="login-password">Senha</Label>
-                          <Input
-                            id="login-password"
-                            type="password"
-                            value={loginPassword}
-                            onChange={(e) => setLoginPassword(e.target.value)}
-                            required
-                            disabled={processing}
-                          />
-                        </div>
-                        <Button type="submit" className="w-full" disabled={processing}>
-                          {processing ? 'Entrando...' : 'Entrar'}
-                        </Button>
-                      </form>
-                    </TabsContent>
-
-                    <TabsContent value="signup">
-                      <form onSubmit={handleSignup} className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="signup-name">Nome completo</Label>
-                          <Input
-                            id="signup-name"
-                            type="text"
-                            value={signupName}
-                            onChange={(e) => setSignupName(e.target.value)}
-                            required
-                            disabled={processing}
-                            maxLength={100}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="signup-email">E-mail</Label>
-                          <Input
-                            id="signup-email"
-                            type="email"
-                            value={signupEmail}
-                            onChange={(e) => setSignupEmail(e.target.value)}
-                            required
-                            disabled={processing}
-                            maxLength={255}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="signup-password">Senha</Label>
-                          <Input
-                            id="signup-password"
-                            type="password"
-                            value={signupPassword}
-                            onChange={(e) => setSignupPassword(e.target.value)}
-                            required
-                            disabled={processing}
-                            maxLength={100}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="signup-confirm">Confirmar senha</Label>
-                          <Input
-                            id="signup-confirm"
-                            type="password"
-                            value={signupConfirmPassword}
-                            onChange={(e) => setSignupConfirmPassword(e.target.value)}
-                            required
-                            disabled={processing}
-                          />
-                        </div>
-                        <Button type="submit" className="w-full" disabled={processing}>
-                          {processing ? 'Criando...' : 'Criar conta'}
-                        </Button>
-                      </form>
-                    </TabsContent>
-                  </Tabs>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Dados do comprador */}
+            {/* Dados do comprador - sempre visível */}
             <Card>
               <CardHeader>
                 <CardTitle>Dados do Comprador</CardTitle>
                 <CardDescription>
-                  Preencha seus dados para finalizar a compra
+                  Preencha seus dados para continuar
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -467,6 +365,117 @@ const Checkout = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Autenticação - só aparece quando necessário */}
+            {(showAuth || user) && (
+              <Card className="border-2 border-primary/50">
+                <CardHeader>
+                  <CardTitle>
+                    {user ? '✓ Você está logado' : 'Login ou Cadastro'}
+                  </CardTitle>
+                  <CardDescription>
+                    {user
+                      ? `Logado como: ${user.email}`
+                      : 'Para finalizar sua compra, faça login ou crie uma conta'}
+                  </CardDescription>
+                </CardHeader>
+                {!user && (
+                  <CardContent>
+                    <Tabs defaultValue="login">
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="login">Entrar</TabsTrigger>
+                        <TabsTrigger value="signup">Cadastrar</TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="login">
+                        <form onSubmit={handleLogin} className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="login-email">E-mail</Label>
+                            <Input
+                              id="login-email"
+                              type="email"
+                              value={loginEmail}
+                              onChange={(e) => setLoginEmail(e.target.value)}
+                              required
+                              disabled={processing}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="login-password">Senha</Label>
+                            <Input
+                              id="login-password"
+                              type="password"
+                              value={loginPassword}
+                              onChange={(e) => setLoginPassword(e.target.value)}
+                              required
+                              disabled={processing}
+                            />
+                          </div>
+                          <Button type="submit" className="w-full" disabled={processing}>
+                            {processing ? 'Entrando...' : 'Entrar'}
+                          </Button>
+                        </form>
+                      </TabsContent>
+
+                      <TabsContent value="signup">
+                        <form onSubmit={handleSignup} className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="signup-name">Nome completo</Label>
+                            <Input
+                              id="signup-name"
+                              type="text"
+                              value={signupName}
+                              onChange={(e) => setSignupName(e.target.value)}
+                              required
+                              disabled={processing}
+                              maxLength={100}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="signup-email">E-mail</Label>
+                            <Input
+                              id="signup-email"
+                              type="email"
+                              value={signupEmail}
+                              onChange={(e) => setSignupEmail(e.target.value)}
+                              required
+                              disabled={processing}
+                              maxLength={255}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="signup-password">Senha</Label>
+                            <Input
+                              id="signup-password"
+                              type="password"
+                              value={signupPassword}
+                              onChange={(e) => setSignupPassword(e.target.value)}
+                              required
+                              disabled={processing}
+                              maxLength={100}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="signup-confirm">Confirmar senha</Label>
+                            <Input
+                              id="signup-confirm"
+                              type="password"
+                              value={signupConfirmPassword}
+                              onChange={(e) => setSignupConfirmPassword(e.target.value)}
+                              required
+                              disabled={processing}
+                            />
+                          </div>
+                          <Button type="submit" className="w-full" disabled={processing}>
+                            {processing ? 'Criando...' : 'Criar conta'}
+                          </Button>
+                        </form>
+                      </TabsContent>
+                    </Tabs>
+                  </CardContent>
+                )}
+              </Card>
+            )}
           </div>
 
           {/* Resumo do pedido */}
@@ -522,20 +531,24 @@ const Checkout = () => {
                 <Button
                   className="w-full h-12 text-base font-semibold bg-gradient-to-r from-primary to-accent hover:opacity-90"
                   onClick={handleFinalizePurchase}
-                  disabled={processing || !user}
+                  disabled={processing}
                   size="lg"
                 >
                   {processing ? (
                     'Processando...'
-                  ) : !user ? (
-                    'Faça login para continuar'
                   ) : (
                     <>
                       <CreditCard className="mr-2 h-5 w-5" />
-                      Finalizar Compra
+                      {user ? 'Finalizar Compra' : 'Continuar'}
                     </>
                   )}
                 </Button>
+
+                {!user && (
+                  <p className="text-center text-xs text-muted-foreground">
+                    Você poderá fazer login ou cadastro na próxima etapa
+                  </p>
+                )}
 
                 <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground pt-2">
                   <Lock className="h-3 w-3" />

@@ -108,7 +108,7 @@ const EventPublic = () => {
       return;
     }
 
-    // Preparar dados do carrinho
+    // Preparar dados do carrinho para URL
     const cartItems = Object.entries(cart)
       .filter(([, qty]) => qty > 0)
       .map(([lotId, quantity]) => ({
@@ -117,7 +117,7 @@ const EventPublic = () => {
         quantity,
       }));
 
-    // Navegar para checkout com dados
+    // Navegar para checkout (não precisa estar logado)
     const cartData = encodeURIComponent(JSON.stringify(cartItems));
     navigate(`/checkout?eventId=${event.id}&cart=${cartData}`);
   };
