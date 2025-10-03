@@ -342,90 +342,79 @@ const EventPublic = () => {
             )}
 
             {/* Ingressos */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Ticket className="h-5 w-5" />
-                  Ingressos
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  {sectors.map((sector) => {
-                    const sectorLots = lots.filter((l) => l.sector_name === sector.nome);
-                    if (sectorLots.length === 0) return null;
+            <div className="space-y-6">
+              <div className="bg-card rounded-lg border p-6">
+                <h2 className="text-center text-2xl font-bold mb-6">Ingresso</h2>
+                
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {lots.map((lot) => {
+                    const available = isLotAvailable(lot);
+                    const remaining = lot.qtd_total - lot.qtd_vendida;
+                    const quantity = cart[lot.id] || 0;
+                    const ticketType = ticketTypes.find(tt => tt.id === lot.ticket_type_id);
+                    const sector = sectors.find(s => s.id === ticketType?.sector_id);
 
                     return (
-                      <div key={sector.id}>
-                        <h3 className="mb-4 text-lg font-bold">{sector.nome}</h3>
-                        <div className="space-y-3">
-                          {sectorLots.map((lot) => {
-                            const available = isLotAvailable(lot);
-                            const remaining = lot.qtd_total - lot.qtd_vendida;
-                            const quantity = cart[lot.id] || 0;
-
-                            return (
-                              <Card key={lot.id} className={!available ? 'opacity-60' : ''}>
-                                <CardContent className="p-4">
-                                  <div className="flex items-center justify-between gap-4">
-                                    <div className="flex-1">
-                                      <h4 className="font-semibold text-foreground">
-                                        {lot.ticket_type_name} - {lot.nome}
-                                      </h4>
-                                      <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-                                        <span className="font-mono text-lg font-bold text-primary">
-                                          {formatBRL(lot.preco)}
-                                        </span>
-                                        <span>•</span>
-                                        <span>
-                                          {available 
-                                            ? `${remaining} disponíveis`
-                                            : 'Esgotado'
-                                          }
-                                        </span>
-                                      </div>
-                                      <p className="mt-1 text-xs text-muted-foreground">
-                                        Pague em até 12x
-                                      </p>
-                                    </div>
-
-                                    {available ? (
-                                      <div className="flex items-center gap-2">
-                                        <Button
-                                          variant="outline"
-                                          size="icon"
-                                          onClick={() => updateQuantity(lot.id, -1)}
-                                          disabled={quantity === 0}
-                                        >
-                                          <Minus className="h-4 w-4" />
-                                        </Button>
-                                        <span className="w-8 text-center font-semibold">
-                                          {quantity}
-                                        </span>
-                                        <Button
-                                          variant="outline"
-                                          size="icon"
-                                          onClick={() => updateQuantity(lot.id, 1)}
-                                          disabled={quantity >= remaining}
-                                        >
-                                          <Plus className="h-4 w-4" />
-                                        </Button>
-                                      </div>
-                                    ) : (
-                                      <Badge variant="secondary">Indisponível</Badge>
-                                    )}
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            );
-                          })}
-                        </div>
-                      </div>
+                      <Card key={lot.id} className={`${!available ? 'opacity-50' : ''}`}>
+                        <CardContent className="p-5">
+                          <div className="space-y-3">
+                            {/* Nome do ingresso */}
+                            <h3 className="font-bold text-foreground">
+                              {lot.ticket_type_name} - {lot.nome}
+                            </h3>
+                            
+                            {/* Preço */}
+                            <div className="text-foreground/80">
+                              <span className="text-base">
+                                R$ {lot.preco.toFixed(2).replace('.', ',')}
+                              </span>
+                              <span className="text-sm text-muted-foreground">
+                                {' '}(+ R$ {(lot.preco * 0.1).toFixed(2).replace('.', ',')} taxa)
+                              </span>
+                            </div>
+                            
+                            {/* Parcelamento */}
+                            <p className="text-sm font-semibold text-green-600">
+                              Pague em até 12x
+                            </p>
+                            
+                            {/* Ver Detalhes */}
+                            <button className="text-sm font-medium text-blue-600 hover:text-blue-700">
+                              Ver Detalhes
+                            </button>
+                            
+                            {/* Controles de quantidade */}
+                            <div className="flex items-center justify-end gap-3 pt-2">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8 rounded-full"
+                                onClick={() => updateQuantity(lot.id, -1)}
+                                disabled={!available || quantity === 0}
+                              >
+                                <Minus className="h-4 w-4" />
+                              </Button>
+                              <span className="min-w-[2rem] text-center font-semibold">
+                                {quantity}
+                              </span>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8 rounded-full"
+                                onClick={() => updateQuantity(lot.id, 1)}
+                                disabled={!available || quantity >= remaining}
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
                     );
                   })}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
           {/* Sidebar com resumo - sticky */}
