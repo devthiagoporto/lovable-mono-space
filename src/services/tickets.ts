@@ -24,6 +24,15 @@ export interface CreateTicketRequest {
   cpfTitular: string;
 }
 
+export async function assignTicket(tenantId: string, ticketId: string, nome: string, cpf: string) {
+  const { data, error } = await supabase.functions.invoke('tickets-assign', {
+    headers: { 'x-tenant-id': tenantId },
+    body: { ticketId, nome, cpf },
+  });
+  if (error) throw error;
+  return data as { ok: boolean; ticketId: string; qr: string };
+}
+
 export const ticketService = {
   async create(request: CreateTicketRequest): Promise<Ticket> {
     const { data, error } = await supabase
