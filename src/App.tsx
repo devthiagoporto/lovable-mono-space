@@ -10,8 +10,8 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import EventPublic from "./pages/EventPublic";
 import Checkout from "./pages/Checkout";
-import Orders from "./pages/Orders";
 import Checkin from "./pages/Checkin";
+import Orders from "./pages/Orders";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
