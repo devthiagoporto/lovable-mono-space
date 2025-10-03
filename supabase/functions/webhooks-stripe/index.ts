@@ -55,44 +55,185 @@ Deno.serve(async (req) => {
     // Handle checkout.session.completed
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
-      const orderId = session.metadata?.order_id || session.client_reference_id;
-
-      if (!orderId) {
-        console.error('No order_id found in session metadata');
+      
+      // Only process if payment is completed
+      if (session.payment_status !== 'paid') {
+        console.log('Payment not completed yet, skipping');
         return new Response(
-          JSON.stringify({ error: 'Missing order_id in metadata' }),
+          JSON.stringify({ received: true, status: 'pending' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const orderId = session.metadata?.order_id || session.client_reference_id;
+      const tenantId = session.metadata?.tenant_id;
+
+      if (!orderId || !tenantId) {
+        console.error('Missing order_id or tenant_id in session metadata');
+        return new Response(
+          JSON.stringify({ error: 'Missing required metadata' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
       console.log('Processing payment for order:', orderId);
 
-      // Update order status to paid
-      const { data: order, error: updateError } = await supabase
-        .from('orders')
-        .update({ status: 'pago' })
-        .eq('id', orderId)
-        .select()
-        .single();
+      try {
+        // Load order and order_items
+        const { data: order, error: orderError } = await supabase
+          .from('orders')
+          .select('*, buyer_id')
+          .eq('id', orderId)
+          .single();
 
-      if (updateError) {
-        console.error('Failed to update order:', updateError);
-        throw new Error('Failed to update order status');
-      }
-
-      console.log('Order marked as paid:', orderId);
-
-      // TODO: Create tickets (one per unit)
-      // This will be implemented in the next phase
-      // For now, we just mark the order as paid
-
-      return new Response(
-        JSON.stringify({ received: true, orderId }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        if (orderError || !order) {
+          throw new Error('Order not found');
         }
-      );
+
+        const { data: orderItems, error: itemsError } = await supabase
+          .from('order_items')
+          .select('*')
+          .eq('order_id', orderId);
+
+        if (itemsError || !orderItems || orderItems.length === 0) {
+          throw new Error('Order items not found');
+        }
+
+        // Get buyer info
+        const { data: buyer, error: buyerError } = await supabase
+          .from('app_users')
+          .select('nome, cpf')
+          .eq('id', order.buyer_id)
+          .single();
+
+        const buyerName = buyer?.nome || 'Comprador';
+        const buyerCpf = buyer?.cpf || '00000000000';
+
+        console.log('Buyer info loaded:', { buyerName, buyerCpf });
+
+        // Process each item: update stock and create tickets
+        for (const item of orderItems) {
+          console.log(`Processing item: lot ${item.lot_id}, quantity ${item.quantity}`);
+
+          // Update lot stock atomically
+          const { data: updatedLot, error: stockError } = await supabase
+            .rpc('increment_lot_sold', {
+              p_lot_id: item.lot_id,
+              p_quantity: item.quantity,
+            });
+
+          // If RPC doesn't exist, use direct update with check
+          if (stockError?.code === '42883') {
+            // Function doesn't exist, use direct update
+            const { data: lot, error: lotError } = await supabase
+              .from('lots')
+              .select('qtd_vendida, qtd_total')
+              .eq('id', item.lot_id)
+              .single();
+
+            if (lotError || !lot) {
+              throw new Error(`Lot ${item.lot_id} not found`);
+            }
+
+            const newSold = lot.qtd_vendida + item.quantity;
+            if (newSold > lot.qtd_total) {
+              throw new Error(`Insufficient stock for lot ${item.lot_id}`);
+            }
+
+            const { error: updateError } = await supabase
+              .from('lots')
+              .update({ qtd_vendida: newSold })
+              .eq('id', item.lot_id);
+
+            if (updateError) {
+              throw new Error(`Failed to update stock for lot ${item.lot_id}`);
+            }
+
+            console.log(`Stock updated for lot ${item.lot_id}: ${lot.qtd_vendida} -> ${newSold}`);
+          } else if (stockError) {
+            console.error('Stock update error:', stockError);
+            throw new Error(`Failed to update stock: ${stockError.message}`);
+          }
+
+          // Get sector_id from ticket_type
+          const { data: ticketType, error: ttError } = await supabase
+            .from('ticket_types')
+            .select('sector_id')
+            .eq('id', item.ticket_type_id)
+            .single();
+
+          if (ttError || !ticketType) {
+            throw new Error(`Ticket type ${item.ticket_type_id} not found`);
+          }
+
+          // Create tickets (one per unit)
+          const tickets = Array.from({ length: item.quantity }, () => ({
+            order_id: orderId,
+            ticket_type_id: item.ticket_type_id,
+            sector_id: ticketType.sector_id,
+            tenant_id: tenantId,
+            nome_titular: buyerName,
+            cpf_titular: buyerCpf,
+            status: 'emitido',
+            qr_version: 1,
+            qr_last_issued_at: new Date().toISOString(),
+          }));
+
+          const { error: ticketsError } = await supabase
+            .from('tickets')
+            .insert(tickets);
+
+          if (ticketsError) {
+            console.error('Tickets creation error:', ticketsError);
+            throw new Error('Failed to create tickets');
+          }
+
+          console.log(`Created ${item.quantity} tickets for item ${item.id}`);
+        }
+
+        // Update order status to paid
+        const { error: updateError } = await supabase
+          .from('orders')
+          .update({
+            status: 'pago',
+            payment_intent_id: session.payment_intent as string,
+          })
+          .eq('id', orderId);
+
+        if (updateError) {
+          console.error('Failed to update order:', updateError);
+          throw new Error('Failed to update order status');
+        }
+
+        console.log('Order marked as paid with tickets issued:', orderId);
+
+        return new Response(
+          JSON.stringify({ 
+            received: true, 
+            orderId,
+            ticketsCreated: orderItems.reduce((sum, item) => sum + item.quantity, 0)
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      } catch (error) {
+        console.error('Error processing payment:', error);
+        // Log the error but return 200 to acknowledge webhook
+        // Stripe will retry if we return error status
+        return new Response(
+          JSON.stringify({ 
+            received: true, 
+            error: error.message,
+            orderId 
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
     }
 
     // For other events, just acknowledge

@@ -378,6 +378,78 @@ export type Database = {
           },
         ]
       }
+      order_items: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          lot_id: string
+          order_id: string
+          quantity: number
+          tenant_id: string
+          ticket_type_id: string
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          lot_id: string
+          order_id: string
+          quantity: number
+          tenant_id: string
+          ticket_type_id: string
+          unit_price: number
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          lot_id?: string
+          order_id?: string
+          quantity?: number
+          tenant_id?: string
+          ticket_type_id?: string
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_lot_id_fkey"
+            columns: ["lot_id"]
+            isOneToOne: false
+            referencedRelation: "lots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_ticket_type_id_fkey"
+            columns: ["ticket_type_id"]
+            isOneToOne: false
+            referencedRelation: "ticket_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           buyer_id: string | null

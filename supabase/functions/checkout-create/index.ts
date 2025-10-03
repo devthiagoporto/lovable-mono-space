@@ -140,6 +140,33 @@ Deno.serve(async (req) => {
 
     console.log('Order created:', order.id);
 
+    // Create order_items
+    const orderItems = items.map((item) => {
+      const lot = lots.find((l) => l.id === item.lotId)!;
+      return {
+        order_id: order.id,
+        tenant_id: tenantId,
+        event_id: eventId,
+        ticket_type_id: item.ticketTypeId,
+        lot_id: item.lotId,
+        quantity: item.quantity,
+        unit_price: parseFloat(lot.preco),
+      };
+    });
+
+    const { error: itemsError } = await supabase
+      .from('order_items')
+      .insert(orderItems);
+
+    if (itemsError) {
+      console.error('Order items creation error:', itemsError);
+      // Rollback order
+      await supabase.from('orders').delete().eq('id', order.id);
+      throw new Error('Failed to create order items');
+    }
+
+    console.log('Order items created:', orderItems.length);
+
     // Initialize Stripe
     const stripeSecretKey = gateways.config?.secretKey;
     if (!stripeSecretKey) {

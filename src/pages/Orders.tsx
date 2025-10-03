@@ -46,16 +46,18 @@ const Orders = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, 'default' | 'secondary' | 'destructive'> = {
-      rascunho: 'secondary',
-      pendente: 'default',
-      confirmado: 'default',
-      cancelado: 'destructive',
+    const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+      rascunho: { label: 'Rascunho', variant: 'secondary' },
+      aguardando_pagto: { label: 'Aguardando Pagamento', variant: 'outline' },
+      pago: { label: 'Pago', variant: 'default' },
+      cancelado: { label: 'Cancelado', variant: 'destructive' },
     };
 
+    const statusInfo = statusMap[status] || { label: status, variant: 'default' };
+
     return (
-      <Badge variant={variants[status] || 'default'}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+      <Badge variant={statusInfo.variant}>
+        {statusInfo.label}
       </Badge>
     );
   };
@@ -114,31 +116,46 @@ const Orders = () => {
                       <>
                         <Separator />
                         <div>
-                          <h4 className="font-semibold mb-3 flex items-center gap-2">
-                            <TicketIcon className="h-4 w-4" />
-                            Ingressos ({tickets[order.id].length})
-                          </h4>
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-semibold flex items-center gap-2">
+                              <TicketIcon className="h-4 w-4" />
+                              Ingressos Emitidos
+                            </h4>
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              {tickets[order.id].length} {tickets[order.id].length === 1 ? 'ingresso' : 'ingressos'}
+                            </Badge>
+                          </div>
                           <div className="space-y-2">
                             {tickets[order.id].map((ticket) => (
-                              <Link
+                              <div
                                 key={ticket.id}
-                                to={`/tickets/${ticket.id}`}
-                                className="block"
+                                className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
                               >
-                                <div className="p-3 rounded-lg border hover:bg-accent transition-colors">
-                                  <div className="flex justify-between items-center">
-                                    <div>
-                                      <p className="font-medium">{ticket.nome_titular}</p>
-                                      <p className="text-xs text-muted-foreground">
-                                        CPF: {ticket.cpf_titular}
-                                      </p>
-                                    </div>
-                                    <Badge variant="secondary">{ticket.status}</Badge>
+                                <div className="flex justify-between items-center">
+                                  <div>
+                                    <p className="font-medium">{ticket.nome_titular}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      CPF: {ticket.cpf_titular}
+                                    </p>
                                   </div>
+                                  <Badge 
+                                    variant={ticket.status === 'emitido' ? 'default' : 'secondary'}
+                                  >
+                                    {ticket.status}
+                                  </Badge>
                                 </div>
-                              </Link>
+                              </div>
                             ))}
                           </div>
+                        </div>
+                      </>
+                    )}
+
+                    {!tickets[order.id] || tickets[order.id].length === 0 && order.status === 'aguardando_pagto' && (
+                      <>
+                        <Separator />
+                        <div className="text-center py-4 text-sm text-muted-foreground">
+                          Aguardando confirmação do pagamento para emitir os ingressos
                         </div>
                       </>
                     )}

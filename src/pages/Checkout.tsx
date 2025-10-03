@@ -264,7 +264,7 @@ const Checkout = () => {
       const result = await checkoutService.create(event.tenant_id, {
         eventId: event.id,
         items,
-        successUrl: `${window.location.origin}/orders/{ORDER_ID}`,
+        successUrl: `${window.location.origin}/success?orderId={ORDER_ID}`,
         cancelUrl: `${window.location.origin}/checkout?eventId=${event.id}&cart=${encodeURIComponent(JSON.stringify(cartItems))}`,
         buyerEmail,
       });

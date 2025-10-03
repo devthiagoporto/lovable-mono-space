@@ -12,6 +12,7 @@ import EventPublic from "./pages/EventPublic";
 import Checkout from "./pages/Checkout";
 import Checkin from "./pages/Checkin";
 import Orders from "./pages/Orders";
+import OrderSuccess from "./pages/OrderSuccess";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/orders/:orderId" element={<Orders />} />
+            <Route path="/success" element={<OrderSuccess />} />
             <Route
               path="/dashboard/*"
               element={
