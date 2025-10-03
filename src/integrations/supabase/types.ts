@@ -436,6 +436,44 @@ export type Database = {
           },
         ]
       }
+      payment_gateways: {
+        Row: {
+          active: boolean
+          config: Json
+          created_at: string
+          id: string
+          provider: Database["public"]["Enums"]["payment_provider"]
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          config?: Json
+          created_at?: string
+          id?: string
+          provider: Database["public"]["Enums"]["payment_provider"]
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          config?: Json
+          created_at?: string
+          id?: string
+          provider?: Database["public"]["Enums"]["payment_provider"]
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_gateways_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       revocations: {
         Row: {
           created_at: string
@@ -802,6 +840,7 @@ export type Database = {
       checkin_result: "ok" | "duplicado" | "invalido" | "cancelado"
       coupon_type: "percentual" | "valor" | "cortesia"
       order_status: "rascunho" | "aguardando_pagto" | "pago" | "cancelado"
+      payment_provider: "stripe" | "pagarme" | "mercadopago" | "pix_manual"
       role_type:
         | "admin_saas"
         | "organizer_admin"
@@ -939,6 +978,7 @@ export const Constants = {
       checkin_result: ["ok", "duplicado", "invalido", "cancelado"],
       coupon_type: ["percentual", "valor", "cortesia"],
       order_status: ["rascunho", "aguardando_pagto", "pago", "cancelado"],
+      payment_provider: ["stripe", "pagarme", "mercadopago", "pix_manual"],
       role_type: [
         "admin_saas",
         "organizer_admin",

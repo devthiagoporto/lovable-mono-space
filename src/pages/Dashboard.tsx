@@ -8,6 +8,7 @@ import Operators from './Dashboard/Operators';
 import Coupons from './Dashboard/Coupons';
 import CouponForm from './Dashboard/CouponForm';
 import CouponAnalytics from './Dashboard/CouponAnalytics';
+import PaymentSettings from './Dashboard/PaymentSettings';
 
 const DashboardHome = () => {
   const { user, memberships, signOut } = useAuth();
@@ -47,13 +48,22 @@ const DashboardHome = () => {
             </Button>
 
             {canManageOperators && (
-              <Button
-                onClick={() => navigate('/dashboard/operators')}
-                className="w-full"
-                variant="outline"
-              >
-                Gerenciar Operadores
-              </Button>
+              <>
+                <Button
+                  onClick={() => navigate('/dashboard/operators')}
+                  className="w-full"
+                  variant="outline"
+                >
+                  Gerenciar Operadores
+                </Button>
+                <Button
+                  onClick={() => navigate('/dashboard/settings/payments')}
+                  className="w-full"
+                  variant="outline"
+                >
+                  Formas de Pagamento
+                </Button>
+              </>
             )}
           </div>
 
@@ -84,6 +94,7 @@ const Dashboard = () => {
       <Route path="events/:eventId/coupons/:couponId" element={<CouponForm />} />
       <Route path="events/:eventId/coupons/analytics" element={<CouponAnalytics />} />
       <Route path="operators" element={<Operators />} />
+      <Route path="settings/payments" element={<PaymentSettings />} />
     </Routes>
   );
 };
