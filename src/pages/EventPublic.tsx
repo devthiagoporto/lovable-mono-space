@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { eventService, Event } from '@/services/events';
 import { sectorService, Sector } from '@/services/sectors';
 import { ticketTypeService, TicketType } from '@/services/ticketTypes';
@@ -9,10 +9,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/utils/date';
 import { formatBRL } from '@/lib/utils/currency';
 import { formatCPF } from '@/lib/utils/cpf';
+import { Calendar, MapPin, Share2, Minus, Plus, CreditCard, ArrowLeft, Ticket } from 'lucide-react';
 
 interface LotWithType extends Lot {
   ticket_type_name: string;
@@ -196,6 +199,37 @@ const EventPublic = () => {
     return lot.qtd_vendida < lot.qtd_total;
   };
 
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: event?.titulo,
+          text: event?.descricao || '',
+          url: window.location.href,
+        });
+      } catch (error) {
+        console.log('Share cancelled');
+      }
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      toast({
+        title: 'Link copiado!',
+        description: 'O link do evento foi copiado para a área de transferência',
+      });
+    }
+  };
+
+  const updateQuantity = (lotId: string, delta: number) => {
+    const lot = lots.find((l) => l.id === lotId);
+    if (!lot) return;
+    
+    const remaining = lot.qtd_total - lot.qtd_vendida;
+    const currentQty = cart[lotId] || 0;
+    const newQty = Math.max(0, Math.min(currentQty + delta, remaining));
+    
+    handleQuantityChange(lotId, String(newQty));
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -219,125 +253,265 @@ const EventPublic = () => {
   }, 0);
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="mx-auto max-w-6xl">
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-3xl">{event.titulo}</CardTitle>
-            <CardDescription>{event.descricao}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <p><strong>Local:</strong> {event.local}</p>
-              <p><strong>Início:</strong> {formatDate(event.inicio)}</p>
-              <p><strong>Fim:</strong> {formatDate(event.fim)}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Seus Dados</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+    <div className="min-h-screen bg-background">
+      {/* Hero Section */}
+      <div className="relative bg-gradient-to-br from-primary/20 via-background to-accent/20 border-b">
+        {event.imagem_url && (
+          <div className="absolute inset-0 opacity-20">
+            <img src={event.imagem_url} alt="" className="h-full w-full object-cover" />
+          </div>
+        )}
+        <div className="relative container mx-auto px-4 py-8">
+          <Button variant="ghost" size="sm" asChild className="mb-4">
+            <Link to="/">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Voltar para eventos
+            </Link>
+          </Button>
+          
+          <div className="grid gap-8 lg:grid-cols-[1fr,400px]">
+            {/* Informações principais */}
             <div>
-              <Label htmlFor="cpf">CPF *</Label>
-              <Input
-                id="cpf"
-                value={cpf}
-                onChange={(e) => setCpf(formatCPF(e.target.value))}
-                placeholder="000.000.000-00"
-                maxLength={14}
-              />
-            </div>
-            <div>
-              <Label htmlFor="coupon">Cupom de Desconto (opcional)</Label>
-              <Input
-                id="coupon"
-                value={couponCode}
-                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                placeholder="Digite o código"
-                className="uppercase"
-              />
-            </div>
-          </CardContent>
-        </Card>
+              <h1 className="mb-4 text-4xl font-black text-foreground lg:text-5xl">
+                {event.titulo}
+              </h1>
+              
+              <div className="mb-6 space-y-3">
+                <div className="flex items-center gap-2 text-lg">
+                  <Calendar className="h-5 w-5 text-primary" />
+                  <span className="font-medium">{formatDate(event.inicio)}</span>
+                  {event.fim && (
+                    <>
+                      <span className="text-muted-foreground">até</span>
+                      <span className="font-medium">{formatDate(event.fim)}</span>
+                    </>
+                  )}
+                </div>
+                
+                {event.local && (
+                  <div className="flex items-start gap-2 text-lg">
+                    <MapPin className="mt-1 h-5 w-5 text-primary" />
+                    <span>{event.local}</span>
+                  </div>
+                )}
+                
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-sm">
+                    <CreditCard className="mr-1 h-3 w-3" />
+                    Parcele em até 12x
+                  </Badge>
+                </div>
+              </div>
 
-        <div className="mb-6 space-y-4">
-          {sectors.map((sector) => {
-            const sectorLots = lots.filter((l) => l.sector_name === sector.nome);
-            if (sectorLots.length === 0) return null;
+              <Button onClick={handleShare} variant="outline" size="lg">
+                <Share2 className="mr-2 h-4 w-4" />
+                Compartilhar
+              </Button>
+            </div>
 
-            return (
-              <Card key={sector.id}>
+            {/* Card com imagem do evento */}
+            {event.imagem_url && (
+              <div className="hidden lg:block">
+                <img 
+                  src={event.imagem_url} 
+                  alt={event.titulo}
+                  className="w-full rounded-lg shadow-2xl"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="container mx-auto px-4 py-8">
+        <div className="grid gap-8 lg:grid-cols-[1fr,400px]">
+          {/* Conteúdo principal */}
+          <div className="space-y-8">
+            {/* Descrição do evento */}
+            {event.descricao && (
+              <Card>
                 <CardHeader>
-                  <CardTitle>{sector.nome}</CardTitle>
-                  <CardDescription>Capacidade: {sector.capacidade}</CardDescription>
+                  <CardTitle>Descrição do evento</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {sectorLots.map((lot) => {
-                      const available = isLotAvailable(lot);
-                      const remaining = lot.qtd_total - lot.qtd_vendida;
-
-                      return (
-                        <div key={lot.id} className="flex items-center justify-between border-b pb-4 last:border-0">
-                          <div className="flex-1">
-                            <h4 className="font-semibold">{lot.ticket_type_name} - {lot.nome}</h4>
-                            <p className="text-sm text-muted-foreground">
-                              {formatBRL(lot.preco)} • Disponíveis: {remaining}/{lot.qtd_total}
-                            </p>
-                            {!available && (
-                              <p className="text-sm text-destructive">Indisponível</p>
-                            )}
-                          </div>
-                          <div className="w-24">
-                            <Input
-                              type="number"
-                              min="0"
-                              max={remaining}
-                              value={cart[lot.id] || 0}
-                              onChange={(e) => handleQuantityChange(lot.id, e.target.value)}
-                              disabled={!available}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <p className="whitespace-pre-wrap text-foreground/90 leading-relaxed">
+                    {event.descricao}
+                  </p>
                 </CardContent>
               </Card>
-            );
-          })}
-        </div>
+            )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Resumo</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span>Total de ingressos:</span>
-                <span className="font-semibold">{totalItems}</span>
-              </div>
-              <div className="flex justify-between text-lg">
-                <span>Valor total:</span>
-                <span className="font-bold">{formatBRL(totalValue)}</span>
-              </div>
-            </div>
-            <Button
-              className="mt-4 w-full"
-              onClick={handleValidateCart}
-              disabled={validating || totalItems === 0}
-            >
-              {validating ? 'Validando...' : 'Continuar'}
-            </Button>
-            <p className="mt-2 text-center text-xs text-muted-foreground">
-              Próxima etapa: pagamento (não implementado ainda)
-            </p>
-          </CardContent>
-        </Card>
+            {/* Ingressos */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Ticket className="h-5 w-5" />
+                  Ingressos
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  {sectors.map((sector) => {
+                    const sectorLots = lots.filter((l) => l.sector_name === sector.nome);
+                    if (sectorLots.length === 0) return null;
+
+                    return (
+                      <div key={sector.id}>
+                        <h3 className="mb-4 text-lg font-bold">{sector.nome}</h3>
+                        <div className="space-y-3">
+                          {sectorLots.map((lot) => {
+                            const available = isLotAvailable(lot);
+                            const remaining = lot.qtd_total - lot.qtd_vendida;
+                            const quantity = cart[lot.id] || 0;
+
+                            return (
+                              <Card key={lot.id} className={!available ? 'opacity-60' : ''}>
+                                <CardContent className="p-4">
+                                  <div className="flex items-center justify-between gap-4">
+                                    <div className="flex-1">
+                                      <h4 className="font-semibold text-foreground">
+                                        {lot.ticket_type_name} - {lot.nome}
+                                      </h4>
+                                      <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+                                        <span className="font-mono text-lg font-bold text-primary">
+                                          {formatBRL(lot.preco)}
+                                        </span>
+                                        <span>•</span>
+                                        <span>
+                                          {available 
+                                            ? `${remaining} disponíveis`
+                                            : 'Esgotado'
+                                          }
+                                        </span>
+                                      </div>
+                                      <p className="mt-1 text-xs text-muted-foreground">
+                                        Pague em até 12x
+                                      </p>
+                                    </div>
+
+                                    {available ? (
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          variant="outline"
+                                          size="icon"
+                                          onClick={() => updateQuantity(lot.id, -1)}
+                                          disabled={quantity === 0}
+                                        >
+                                          <Minus className="h-4 w-4" />
+                                        </Button>
+                                        <span className="w-8 text-center font-semibold">
+                                          {quantity}
+                                        </span>
+                                        <Button
+                                          variant="outline"
+                                          size="icon"
+                                          onClick={() => updateQuantity(lot.id, 1)}
+                                          disabled={quantity >= remaining}
+                                        >
+                                          <Plus className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <Badge variant="secondary">Indisponível</Badge>
+                                    )}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Sidebar com resumo - sticky */}
+          <div className="lg:sticky lg:top-4 lg:h-fit">
+            <Card className="border-2">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg">Resumo do Pedido</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* CPF */}
+                <div>
+                  <Label htmlFor="cpf" className="text-sm font-semibold">
+                    CPF do comprador *
+                  </Label>
+                  <Input
+                    id="cpf"
+                    value={cpf}
+                    onChange={(e) => setCpf(formatCPF(e.target.value))}
+                    placeholder="000.000.000-00"
+                    maxLength={14}
+                    className="mt-1.5"
+                  />
+                </div>
+
+                {/* Cupom */}
+                <div>
+                  <Label htmlFor="coupon" className="text-sm font-semibold">
+                    Cupom de desconto
+                  </Label>
+                  <Input
+                    id="coupon"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    placeholder="Digite o código"
+                    className="mt-1.5 uppercase"
+                  />
+                </div>
+
+                <Separator />
+
+                {/* Totais */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Ingressos</span>
+                    <span className="font-semibold">{totalItems}</span>
+                  </div>
+                  
+                  {totalItems > 0 && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Subtotal</span>
+                        <span className="font-mono">{formatBRL(totalValue)}</span>
+                      </div>
+                      <Separator />
+                      <div className="flex justify-between text-lg">
+                        <span className="font-bold">Total</span>
+                        <span className="font-mono font-bold text-primary">
+                          {formatBRL(totalValue)}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <Button
+                  className="w-full h-12 text-base font-semibold bg-gradient-to-r from-primary to-accent hover:opacity-90"
+                  onClick={handleValidateCart}
+                  disabled={validating || totalItems === 0}
+                  size="lg"
+                >
+                  {validating ? 'Validando...' : 'Comprar Ingressos'}
+                </Button>
+
+                {totalItems === 0 && (
+                  <p className="text-center text-xs text-muted-foreground">
+                    Selecione os ingressos acima
+                  </p>
+                )}
+
+                <p className="text-center text-xs text-muted-foreground">
+                  Pagamento 100% seguro
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </div>
   );
