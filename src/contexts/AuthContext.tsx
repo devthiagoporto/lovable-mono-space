@@ -15,6 +15,7 @@ interface AuthContextType {
   memberships: UserMembership[];
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, name: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   refreshMemberships: () => Promise<void>;
 }
@@ -128,6 +129,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const signUp = async (email: string, password: string, name: string) => {
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            full_name: name,
+          },
+        },
+      });
+
+      if (error) return { error };
+      return { error: null };
+    } catch (error) {
+      return { error: error as Error };
+    }
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
     setMemberships([]);
@@ -141,6 +162,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         memberships,
         loading,
         signIn,
+        signUp,
         signOut,
         refreshMemberships,
       }}
