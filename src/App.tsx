@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import EventPublic from "./pages/EventPublic";
 import Checkout from "./pages/Checkout";
 import Checkin from "./pages/Checkin";
+import CheckinScanner from "./pages/Checkin/Scanner";
 import Orders from "./pages/Orders";
 import OrderSuccess from "./pages/OrderSuccess";
 import NotFound from "./pages/NotFound";
@@ -44,8 +45,9 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route path="/checkin" element={<CheckinScanner />} />
             <Route
-              path="/checkin"
+              path="/checkin-old"
               element={
                 <ProtectedRoute requiredRole="checkin_operator">
                   <Checkin />
