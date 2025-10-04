@@ -18,6 +18,9 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+// Helper de espera para retries exponenciais curtos
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -135,24 +138,55 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Incrementa estoque dos lots (melhor seria via RPC transacional)
+    // Incrementa estoque dos lots com pequenos retries (idempotente por lot)
     for (const [lotId, inc] of Object.entries(perLot)) {
-      const { error: upErr } = await supabase.rpc('increment_lot_safely', {
-        p_lot_id: lotId,
-        p_inc: inc,
-      });
-      if (upErr) {
-        // Fallback caso a RPC não exista: tenta UPDATE condicional
-        const { data: updated, error: updErr } = await supabase
-          .from('lots')
-          .update({ qtd_vendida: (lotsMap.get(lotId)!.qtd_vendida as number) + inc })
-          .eq('id', lotId)
-          .lte('qtd_vendida', lotsMap.get(lotId)!.qtd_total); // barreira leve
-        if (updErr) {
-          console.error('Failed to increment lot', { lotId, err: updErr });
-          await supabase.from('orders').update({ status: 'cancelado' }).eq('id', order.id);
-          return json({ error: 'Failed to increment lot' }, 500);
+      let ok = false;
+      let attempt = 0;
+
+      while (!ok && attempt < 3) {
+        attempt++;
+        // Tenta via RPC (ideal); se não existir/der conflito, faz fallback
+        const { error: upErr } = await supabase.rpc('increment_lot_safely', {
+          p_lot_id: lotId,
+          p_inc: inc,
+        });
+
+        if (!upErr) {
+          ok = true;
+          break;
         }
+
+        // Fallback: UPDATE condicional leve
+        const lot = lotsMap.get(lotId)!;
+        const { error: updErr } = await supabase
+          .from('lots')
+          .update({
+            qtd_vendida: (Number(lot.qtd_vendida) + Number(inc)),
+          })
+          .eq('id', lotId)
+          .lte('qtd_vendida', lot.qtd_total);
+
+        if (!updErr) {
+          ok = true;
+          break;
+        }
+
+        // Espera incremental: 100ms, 200ms
+        if (attempt < 3) await sleep(100 * attempt);
+      }
+
+      if (!ok) {
+        console.error('Failed to increment lot after retries', { lotId, inc });
+        await supabase.from('orders').update({ status: 'cancelado' }).eq('id', order.id);
+        // Loga auditoria de falha
+        await supabase.from('audit_logs').insert({
+          actor_id: null,
+          tenant_id: order.tenant_id,
+          acao: 'payment_failed_increment',
+          alvo: order.id,
+          dados: { provider: 'stripe', lotId, inc, event_id: event.id },
+        });
+        return json({ error: 'Failed to increment lot' }, 500);
       }
     }
 
@@ -195,11 +229,29 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Auditoria: tickets emitidos
+    await supabase.from('audit_logs').insert({
+      actor_id: null,
+      tenant_id: tenantId,
+      acao: 'tickets_emitted',
+      alvo: order.id,
+      dados: { provider: 'stripe', ticket_count: ticketsPayload.length, event_id: event.id },
+    });
+
     // Marca pedido como pago
     await supabase
       .from('orders')
       .update({ status: 'pago', payment_provider: 'stripe' })
       .eq('id', order.id);
+
+    // Auditoria: pagamento confirmado
+    await supabase.from('audit_logs').insert({
+      actor_id: null,
+      tenant_id: order.tenant_id,
+      acao: 'payment_succeeded',
+      alvo: order.id,
+      dados: { provider: 'stripe', event_id: event.id, session_id: sessionId, item_count: items.length },
+    });
 
     // Marca o evento como processado (telemetria/observabilidade)
     await supabase
