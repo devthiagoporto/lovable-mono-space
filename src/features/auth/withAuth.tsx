@@ -21,10 +21,7 @@ export function withAuth<P extends object>(Component: ComponentType<P>) {
       );
     }
 
-    if (!user) {
-      return null;
-    }
-
-    return <Component {...props} />;
+    if (!user) return null;
+    return <Component {...(props as any)} />;
   };
 }

@@ -22,11 +22,8 @@ export function withRole(requiredRole: string) {
         );
       }
 
-      if (!user) {
-        return null;
-      }
-
-      const hasRole = memberships.some((m) => m.role === requiredRole);
+      if (!user) return null;
+      const hasRole = (memberships ?? []).some((m) => m.role === requiredRole);
       if (!hasRole) {
         return (
           <div className="flex min-h-screen items-center justify-center">
@@ -42,8 +39,7 @@ export function withRole(requiredRole: string) {
           </div>
         );
       }
-
-      return <Component {...props} />;
+      return <Component {...(props as any)} />;
     };
   };
 }
