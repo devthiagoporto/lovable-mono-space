@@ -567,6 +567,61 @@ export type Database = {
           },
         ]
       }
+      payment_webhook_events: {
+        Row: {
+          created_at: string
+          external_event_id: string
+          id: string
+          order_id: string | null
+          payload: Json | null
+          processed_at: string | null
+          provider: string
+          tenant_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          external_event_id: string
+          id?: string
+          order_id?: string | null
+          payload?: Json | null
+          processed_at?: string | null
+          provider: string
+          tenant_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          external_event_id?: string
+          id?: string
+          order_id?: string | null
+          payload?: Json | null
+          processed_at?: string | null
+          provider?: string
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_webhook_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_webhook_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "v_my_tickets"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "payment_webhook_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       revocations: {
         Row: {
           created_at: string
@@ -954,6 +1009,16 @@ export type Database = {
       }
     }
     Functions: {
+      claim_webhook_event: {
+        Args: {
+          p_external_id: string
+          p_order_id: string
+          p_payload: Json
+          p_provider: string
+          p_tenant_id: string
+        }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           p_role: Database["public"]["Enums"]["role_type"]
