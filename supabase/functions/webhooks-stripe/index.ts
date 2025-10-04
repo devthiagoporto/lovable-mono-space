@@ -62,6 +62,24 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
+    // IDEMPOTÊNCIA: registra o evento e sai cedo se já foi processado
+    const claim = await supabase.rpc('claim_webhook_event', {
+      p_external_id: event.id,
+      p_provider: 'stripe',
+      p_order_id: orderId,
+      p_tenant_id: tenantId,
+      p_payload: event as any,
+    });
+
+    if (claim.error) {
+      console.error('claim_webhook_event error', claim.error);
+      return json({ error: 'Claim failed' }, 500);
+    }
+    if (claim.data === false) {
+      // Webhook duplicado (já registrado). Encerramos de forma idempotente.
+      return json({ ok: true, idempotent: true }, 200);
+    }
+
     // Carrega order + checa idempotência
     const { data: order, error: orderErr } = await supabase
       .from('orders')
@@ -182,6 +200,13 @@ Deno.serve(async (req) => {
       .from('orders')
       .update({ status: 'pago', payment_provider: 'stripe' })
       .eq('id', order.id);
+
+    // Marca o evento como processado (telemetria/observabilidade)
+    await supabase
+      .from('payment_webhook_events')
+      .update({ processed_at: new Date().toISOString() })
+      .eq('provider', 'stripe')
+      .eq('external_event_id', event.id);
 
     return json({ ok: true, orderId: order.id }, 200);
   } catch (err) {
