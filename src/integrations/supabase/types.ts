@@ -965,6 +965,10 @@ export type Database = {
         Args: { p_tenant: string }
         Returns: boolean
       }
+      increment_lot_safely: {
+        Args: { p_inc: number; p_lot_id: string }
+        Returns: boolean
+      }
       increment_lot_sold: {
         Args: { p_lot_id: string; p_quantity: number }
         Returns: boolean
